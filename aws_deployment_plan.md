@@ -634,13 +634,13 @@ resource "aws_db_instance" "postgres" {
   max_allocated_storage  = 100
   db_name                = "postgres" # Initial DB
   engine                 = "postgres"
-  engine_version         = "15.7"
-  instance_class         = "db.t3.micro"
+  engine_version         = "16.3"
+  instance_class         = "db.t4g.micro"
   username               = "dbadmin"
   password               = "ProductionStrongPassword123!" # Ideally fetched from SSM Parameter Store/Secrets Manager
   db_subnet_group_name   = aws_db_subnet_group.rds.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  multi_az               = true # High availability active-standby database
+  multi_az               = false # Single AZ for cost efficiency on db.t4g.micro
   skip_final_snapshot    = true
 
   tags = { Name = "medilink-rds-postgres" }
