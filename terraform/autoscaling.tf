@@ -78,7 +78,6 @@ resource "aws_launch_template" "backend" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              set -e
               echo "Starting MediLink microservices..."
 
               # Clone latest code from GitHub
@@ -90,17 +89,40 @@ resource "aws_launch_template" "backend" {
                 cd medilink-hub
               fi
 
-              export DATABASE_URL="postgresql+asyncpg://dbadmin:ProductionStrongPassword123!@${aws_db_instance.postgres.endpoint}/"
+              # RDS connection details
+              RDS_HOST="${aws_db_instance.postgres.address}"
+              RDS_PORT="5432"
+              RDS_USER="dbadmin"
+              RDS_PASS="ProductionStrongPassword123!"
+
+              # Create individual databases if they don't exist
+              export PGPASSWORD="$RDS_PASS"
+              for db in user_db appointment_db health_db document_db; do
+                psql -h "$RDS_HOST" -p "$RDS_PORT" -U "$RDS_USER" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || \
+                psql -h "$RDS_HOST" -p "$RDS_PORT" -U "$RDS_USER" -d postgres -c "CREATE DATABASE $db;"
+              done
+
               export S3_BUCKET_NAME="${aws_s3_bucket.documents.bucket}"
               export S3_ENDPOINT="" # Leave empty for native AWS S3
               export AWS_DEFAULT_REGION="us-east-1"
               export JWT_SECRET="supersecret"
 
-              # Install dependencies and start each service
-              cd /home/ec2-user/medilink-hub/user-service && pip install -r requirements.txt && nohup uvicorn main:app --host 0.0.0.0 --port 8001 &
-              cd /home/ec2-user/medilink-hub/appointment-service && pip install -r requirements.txt && nohup uvicorn main:app --host 0.0.0.0 --port 8002 &
-              cd /home/ec2-user/medilink-hub/health-service && pip install -r requirements.txt && nohup uvicorn main:app --host 0.0.0.0 --port 8003 &
-              cd /home/ec2-user/medilink-hub/document-service && pip install -r requirements.txt && nohup uvicorn main:app --host 0.0.0.0 --port 8004 &
+              # Start each service with its own DATABASE_URL
+              cd /home/ec2-user/medilink-hub/user-service && pip install -r requirements.txt && \
+                DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/user_db" \
+                nohup uvicorn main:app --host 0.0.0.0 --port 8001 &
+
+              cd /home/ec2-user/medilink-hub/appointment-service && pip install -r requirements.txt && \
+                DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/appointment_db" \
+                nohup uvicorn main:app --host 0.0.0.0 --port 8002 &
+
+              cd /home/ec2-user/medilink-hub/health-service && pip install -r requirements.txt && \
+                DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/health_db" \
+                nohup uvicorn main:app --host 0.0.0.0 --port 8003 &
+
+              cd /home/ec2-user/medilink-hub/document-service && pip install -r requirements.txt && \
+                DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/document_db" \
+                nohup uvicorn main:app --host 0.0.0.0 --port 8004 &
               EOF
   )
 
