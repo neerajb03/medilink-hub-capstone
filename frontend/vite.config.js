@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: true,
+    allowedHosts: ['.amazonaws.com', 'localhost'],
     proxy: {
       // User service routes
       '/register':     { target: IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`, changeOrigin: true },
