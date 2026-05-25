@@ -37,20 +37,21 @@ resource "aws_launch_template" "frontend" {
               date
 
               # Install dependencies if missing
-              which git || yum install -y git
+              apt-get update
+              which git || apt-get install -y git
               which node || {
-                curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
-                yum install -y nodejs
+                curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+                apt-get install -y nodejs
               }
 
               # Clone latest code from GitHub (Force clean clone)
-              cd /home/ec2-user
+              cd /home/ubuntu
               rm -rf medilink-hub
               git clone https://github.com/neerajb03/medilink-hub.git
               cd medilink-hub
 
               # Install frontend dependencies
-              cd /home/ec2-user/medilink-hub/frontend
+              cd /home/ubuntu/medilink-hub/frontend
               npm install
 
               # Set Internal ALB DNS for Vite proxy (server-side routing to backends)
@@ -90,12 +91,13 @@ resource "aws_launch_template" "backend" {
               date
 
               # Install dependencies if missing
-              which git  || yum install -y git
-              which pip3 || yum install -y python3-pip
-              which psql || yum install -y postgresql15
+              apt-get update
+              which git  || apt-get install -y git
+              which pip3 || apt-get install -y python3-pip python3-venv
+              which psql || apt-get install -y postgresql-client
 
               # Clone latest code from GitHub (Force clean clone)
-              cd /home/ec2-user
+              cd /home/ubuntu
               rm -rf medilink-hub
               git clone https://github.com/neerajb03/medilink-hub.git
               cd medilink-hub
@@ -120,28 +122,33 @@ resource "aws_launch_template" "backend" {
               export AWS_DEFAULT_REGION="us-east-1"
               export JWT_SECRET="supersecret"
 
+              # Setup Python Virtual Environment
+              cd /home/ubuntu/medilink-hub
+              python3 -m venv venv
+              source venv/bin/activate
+
               # Start each service with its own DATABASE_URL
               echo "Starting user-service..."
-              cd /home/ec2-user/medilink-hub/user-service
-              pip3 install -r requirements.txt
+              cd /home/ubuntu/medilink-hub/user-service
+              pip install -r requirements.txt
               export DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/user_db"
               nohup uvicorn main:app --host 0.0.0.0 --port 8001 > /var/log/user-service.log 2>&1 &
 
               echo "Starting appointment-service..."
-              cd /home/ec2-user/medilink-hub/appointment-service
-              pip3 install -r requirements.txt
+              cd /home/ubuntu/medilink-hub/appointment-service
+              pip install -r requirements.txt
               export DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/appointment_db"
               nohup uvicorn main:app --host 0.0.0.0 --port 8002 > /var/log/appointment-service.log 2>&1 &
 
               echo "Starting health-service..."
-              cd /home/ec2-user/medilink-hub/health-service
-              pip3 install -r requirements.txt
+              cd /home/ubuntu/medilink-hub/health-service
+              pip install -r requirements.txt
               export DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/health_db"
               nohup uvicorn main:app --host 0.0.0.0 --port 8003 > /var/log/health-service.log 2>&1 &
 
               echo "Starting document-service..."
-              cd /home/ec2-user/medilink-hub/document-service
-              pip3 install -r requirements.txt
+              cd /home/ubuntu/medilink-hub/document-service
+              pip install -r requirements.txt
               export DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/document_db"
               nohup uvicorn main:app --host 0.0.0.0 --port 8004 > /var/log/document-service.log 2>&1 &
 
