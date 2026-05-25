@@ -79,8 +79,21 @@ resource "aws_lb_listener" "external_http" {
   port              = "80"
   protocol          = "HTTP"
 
-  # Premium Feature: Fallback holding/maintenance response styled cleanly
+  # Default: Forward all traffic to the frontend application
   default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend.arn
+  }
+}
+
+# Domain-Based Routing Example (documentation fixed response)
+# This demonstrates domain-based routing: requests to docs.yourdomain.com
+# return a styled HTML page. Replace with your actual domain as needed.
+resource "aws_lb_listener_rule" "domain_docs_example" {
+  listener_arn = aws_lb_listener.external_http.arn
+  priority     = 200
+
+  action {
     type = "fixed-response"
 
     fixed_response {
@@ -89,7 +102,7 @@ resource "aws_lb_listener" "external_http" {
 <!DOCTYPE html>
 <html>
 <head>
-  <title>MediLink Hub - Under Maintenance</title>
+  <title>MediLink Hub - API Documentation</title>
   <style>
     body { background: #0b0f19; color: #f3f4f6; font-family: system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
     .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 40px; max-width: 480px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.5); backdrop-filter: blur(10px); }
@@ -100,32 +113,21 @@ resource "aws_lb_listener" "external_http" {
 </head>
 <body>
   <div class="card">
-    <h1>MediLink Hub Undergoing Maintenance</h1>
-    <p>We are updating our medical interfaces to better serve patients and doctors. Please check back shortly.</p>
+    <h1>MediLink Hub API Documentation</h1>
+    <p>Welcome to the MediLink Hub API. This is a domain-based routing example using a fixed response.</p>
     <div class="footer">MediLink Cloud Operations Team</div>
   </div>
 </body>
 </html>
 HTML
-      status_code  = "503"
+      status_code  = "200"
     }
   }
-}
 
-# Domain-Based Routing Rule
-resource "aws_lb_listener_rule" "domain_routing" {
-  listener_arn = aws_lb_listener.external_http.arn
-  priority     = 100
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
-  }
-
-  # Example domain hosting: Forward requests only for medilink.yourdomain.com
+  # Example: domain-based routing — requests to docs.yourdomain.com show this page
   condition {
     host_header {
-      values = ["medilink.yourdomain.com", "*.medilink.yourdomain.com"]
+      values = ["docs.yourdomain.com"]
     }
   }
 }
