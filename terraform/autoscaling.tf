@@ -32,11 +32,25 @@ resource "aws_launch_template" "frontend" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
+              set -e
               echo "Starting MediLink Frontend..."
-              cd /home/ec2-user/medilink-frontend
+
+              # Clone latest code from GitHub
+              cd /home/ec2-user
+              if [ -d "medilink-hub" ]; then
+                cd medilink-hub && git pull origin main
+              else
+                git clone https://github.com/neerajb03/medilink-hub.git
+                cd medilink-hub
+              fi
+
+              # Install frontend dependencies
+              cd frontend
+              npm install
+
               # Set Internal ALB DNS for Vite proxy (server-side routing to backends)
               export INTERNAL_ALB_DNS="http://${aws_lb.internal.dns_name}"
-              npm run dev -- --host 0.0.0.0 --port 3000
+              nohup npm run dev -- --host 0.0.0.0 --port 3000 &
               EOF
   )
 
@@ -64,18 +78,29 @@ resource "aws_launch_template" "backend" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
+              set -e
               echo "Starting MediLink microservices..."
+
+              # Clone latest code from GitHub
+              cd /home/ec2-user
+              if [ -d "medilink-hub" ]; then
+                cd medilink-hub && git pull origin main
+              else
+                git clone https://github.com/neerajb03/medilink-hub.git
+                cd medilink-hub
+              fi
+
               export DATABASE_URL="postgresql+asyncpg://dbadmin:ProductionStrongPassword123!@${aws_db_instance.postgres.endpoint}/"
               export S3_BUCKET_NAME="${aws_s3_bucket.documents.bucket}"
               export S3_ENDPOINT="" # Leave empty for native AWS S3
               export AWS_DEFAULT_REGION="us-east-1"
               export JWT_SECRET="supersecret"
 
-              # Run each service using systemd or simple background execution for this AMI
-              cd /home/ec2-user/user-service && uvicorn main:app --host 0.0.0.0 --port 8001 &
-              cd /home/ec2-user/appointment-service && uvicorn main:app --host 0.0.0.0 --port 8002 &
-              cd /home/ec2-user/health-service && uvicorn main:app --host 0.0.0.0 --port 8003 &
-              cd /home/ec2-user/document-service && uvicorn main:app --host 0.0.0.0 --port 8004 &
+              # Install dependencies and start each service
+              cd /home/ec2-user/medilink-hub/user-service && pip install -r requirements.txt && nohup uvicorn main:app --host 0.0.0.0 --port 8001 &
+              cd /home/ec2-user/medilink-hub/appointment-service && pip install -r requirements.txt && nohup uvicorn main:app --host 0.0.0.0 --port 8002 &
+              cd /home/ec2-user/medilink-hub/health-service && pip install -r requirements.txt && nohup uvicorn main:app --host 0.0.0.0 --port 8003 &
+              cd /home/ec2-user/medilink-hub/document-service && pip install -r requirements.txt && nohup uvicorn main:app --host 0.0.0.0 --port 8004 &
               EOF
   )
 

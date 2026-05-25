@@ -2,10 +2,10 @@ import axios from 'axios'
 
 const getToken = () => localStorage.getItem('token')
 
-export const userApi = axios.create({ baseURL: import.meta.env.VITE_USER_URL })
-export const apptApi = axios.create({ baseURL: import.meta.env.VITE_APPOINTMENT_URL })
-export const healthApi = axios.create({ baseURL: import.meta.env.VITE_HEALTH_URL })
-export const documentApi = axios.create({ baseURL: import.meta.env.VITE_DOCUMENT_URL })
+export const userApi = axios.create({ baseURL: import.meta.env.VITE_USER_URL || '' })
+export const apptApi = axios.create({ baseURL: import.meta.env.VITE_APPOINTMENT_URL || '' })
+export const healthApi = axios.create({ baseURL: import.meta.env.VITE_HEALTH_URL || '' })
+export const documentApi = axios.create({ baseURL: import.meta.env.VITE_DOCUMENT_URL || '' })
 
 const authInterceptor = config => {
   const token = getToken()
