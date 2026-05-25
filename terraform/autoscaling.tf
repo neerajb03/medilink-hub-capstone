@@ -96,9 +96,9 @@ resource "aws_autoscaling_group" "frontend" {
   vpc_zone_identifier = [aws_subnet.private_front_a.id, aws_subnet.private_front_b.id]
   target_group_arns   = [aws_lb_target_group.frontend.arn]
 
-  min_size         = 2
-  max_size         = 5
-  desired_capacity = 2
+  min_size         = 1
+  max_size         = 2
+  desired_capacity = 1
 
   launch_template {
     id      = aws_launch_template.frontend.id
@@ -127,9 +127,9 @@ resource "aws_autoscaling_group" "backend" {
     aws_lb_target_group.document_service.arn
   ]
 
-  min_size         = 2
-  max_size         = 6
-  desired_capacity = 2
+  min_size         = 1
+  max_size         = 2
+  desired_capacity = 1
 
   launch_template {
     id      = aws_launch_template.backend.id
