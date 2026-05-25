@@ -32,7 +32,7 @@ resource "aws_launch_template" "frontend" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              exec > /var/log/user-data.log 2>&1
+              # Removed manual exec redirect so output goes to standard cloud-init-output.log (visible in EC2 System Log)
               echo "=== MediLink Frontend Bootstrap ==="
               date
 
@@ -43,14 +43,11 @@ resource "aws_launch_template" "frontend" {
                 yum install -y nodejs
               }
 
-              # Clone latest code from GitHub
+              # Clone latest code from GitHub (Force clean clone)
               cd /home/ec2-user
-              if [ -d "medilink-hub" ]; then
-                cd medilink-hub && git pull origin main
-              else
-                git clone https://github.com/neerajb03/medilink-hub.git
-                cd medilink-hub
-              fi
+              rm -rf medilink-hub
+              git clone https://github.com/neerajb03/medilink-hub.git
+              cd medilink-hub
 
               # Install frontend dependencies
               cd /home/ec2-user/medilink-hub/frontend
@@ -88,7 +85,7 @@ resource "aws_launch_template" "backend" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              exec > /var/log/user-data.log 2>&1
+              # Removed manual exec redirect so output goes to standard cloud-init-output.log (visible in EC2 System Log)
               echo "=== MediLink Backend Bootstrap ==="
               date
 
@@ -97,14 +94,11 @@ resource "aws_launch_template" "backend" {
               which pip3 || yum install -y python3-pip
               which psql || yum install -y postgresql15
 
-              # Clone latest code from GitHub
+              # Clone latest code from GitHub (Force clean clone)
               cd /home/ec2-user
-              if [ -d "medilink-hub" ]; then
-                cd medilink-hub && git pull origin main
-              else
-                git clone https://github.com/neerajb03/medilink-hub.git
-                cd medilink-hub
-              fi
+              rm -rf medilink-hub
+              git clone https://github.com/neerajb03/medilink-hub.git
+              cd medilink-hub
 
               # RDS connection details
               RDS_HOST="${aws_db_instance.postgres.address}"
