@@ -32,13 +32,10 @@ resource "aws_launch_template" "frontend" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              echo "Starting PM2 or React server..."
+              echo "Starting MediLink Frontend..."
               cd /home/ec2-user/medilink-frontend
-              # Set backend Internal ALB URL
-              export VITE_USER_URL="http://${aws_lb.internal.dns_name}:8001"
-              export VITE_APPOINTMENT_URL="http://${aws_lb.internal.dns_name}:8002"
-              export VITE_HEALTH_URL="http://${aws_lb.internal.dns_name}:8003"
-              export VITE_DOCUMENT_URL="http://${aws_lb.internal.dns_name}:8004"
+              # Set Internal ALB DNS for Vite proxy (server-side routing to backends)
+              export INTERNAL_ALB_DNS="http://${aws_lb.internal.dns_name}"
               npm run dev -- --host 0.0.0.0 --port 3000
               EOF
   )
