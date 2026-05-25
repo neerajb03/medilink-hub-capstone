@@ -12,7 +12,7 @@ resource "aws_db_instance" "postgres" {
   max_allocated_storage  = 100
   db_name                = "postgres" # Initial DB
   engine                 = "postgres"
-  engine_version         = "16.3"
+  engine_version         = "18.3"
   instance_class         = "db.t4g.micro"
   username               = "dbadmin"
   password               = "ProductionStrongPassword123!" # Ideally fetched from SSM Parameter Store/Secrets Manager
