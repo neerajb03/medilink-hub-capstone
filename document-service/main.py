@@ -13,7 +13,8 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.future import select
-from minio import Minio
+import boto3
+from botocore.client import Config
 
 from auth.jwt import get_current_user
 
@@ -40,13 +41,29 @@ async def get_db():
         yield session
 
 
-# --- MinIO Client ---
-minio_client = Minio(
-    os.getenv("S3_ENDPOINT", "http://minio:9000").replace("http://", ""),
-    access_key=os.getenv("S3_ACCESS_KEY", "minio"),
-    secret_key=os.getenv("S3_SECRET_KEY", "minio123"),
-    secure=False,
-)
+# --- S3 Client ---
+s3_endpoint = os.getenv("S3_ENDPOINT", "http://minio:9000")
+s3_access_key = os.getenv("S3_ACCESS_KEY", "minio")
+s3_secret_key = os.getenv("S3_SECRET_KEY", "minio123")
+s3_region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+
+# If S3_ENDPOINT is set to standard AWS or empty, use native AWS S3.
+# This makes the exact same code work locally on MinIO and in production on AWS S3!
+if not s3_endpoint or "amazonaws.com" in s3_endpoint:
+    s3_client = boto3.client(
+        "s3",
+        region_name=s3_region,
+        config=Config(signature_version="s3v4")
+    )
+else:
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=s3_endpoint,
+        aws_access_key_id=s3_access_key,
+        aws_secret_access_key=s3_secret_key,
+        region_name=s3_region,
+        config=Config(signature_version="s3v4")
+    )
 
 
 # --- Lifespan ---
@@ -57,8 +74,19 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     # Bucket
     bucket = os.getenv("S3_BUCKET_NAME", "medilink-docs")
-    if not minio_client.bucket_exists(bucket):
-        minio_client.make_bucket(bucket)
+    try:
+        s3_client.head_bucket(Bucket=bucket)
+    except Exception:
+        try:
+            if s3_region == "us-east-1":
+                s3_client.create_bucket(Bucket=bucket)
+            else:
+                s3_client.create_bucket(
+                    Bucket=bucket,
+                    CreateBucketConfiguration={"LocationConstraint": s3_region}
+                )
+        except Exception as e:
+            print(f"Error creating bucket or bucket already exists: {e}")
     yield
 
 
@@ -161,12 +189,11 @@ async def upload_document(
     object_name = f"patients/{user['user_id']}/{file.filename}"
     bucket = os.getenv("S3_BUCKET_NAME", "medilink-docs")
 
-    minio_client.put_object(
-        bucket,
-        object_name,
-        file_bytes,
-        length=len(content),
-        content_type=file.content_type,
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=object_name,
+        Body=file_bytes,
+        ContentType=file.content_type,
     )
 
     # Save metadata to DB
@@ -256,9 +283,14 @@ async def get_document(
     bucket = os.getenv("S3_BUCKET_NAME", "medilink-docs")
     from datetime import timedelta
 
-    url = minio_client.presigned_get_object(bucket, doc.s3_key, expires=timedelta(hours=1))
-    # Replace internal minio host with localhost for browser access
-    url = url.replace("minio:9000", "localhost:9000")
+    url = s3_client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": doc.s3_key},
+        ExpiresIn=3600
+    )
+    # Replace internal minio host with localhost for browser access only if running locally
+    if "minio:9000" in url:
+        url = url.replace("minio:9000", "localhost:9000")
 
     return {
         "id": str(doc.id),
