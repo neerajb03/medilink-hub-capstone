@@ -13,7 +13,7 @@ variable "backend_ami_id" {
 # Keypair name
 variable "key_name" {
   type    = string
-  default = "medilink-keypair"
+  default = "neerajvmkey"
 }
 
 # --- Launch Templates ---

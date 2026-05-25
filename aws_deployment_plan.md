@@ -927,6 +927,24 @@ resource "aws_lb_listener_rule" "documents" {
 
 ### 7. `autoscaling.tf`
 ```hcl
+# --- AMI Placeholders (To be replaced by custom AMIs constructed in Step 2) ---
+# Feel free to update with real AMIs built via packer or manual console setup.
+variable "frontend_ami_id" {
+  type    = string
+  default = "ami-0c7217cdde317cfec" # Example base Amazon Linux 2023 or custom AMI
+}
+
+variable "backend_ami_id" {
+  type    = string
+  default = "ami-0c7217cdde317cfec" # Example base Amazon Linux 2023 or custom AMI
+}
+
+# Keypair name
+variable "key_name" {
+  type    = string
+  default = "neerajvmkey"
+}
+
 # --- Launch Templates ---
 
 # Frontend Launch Template
