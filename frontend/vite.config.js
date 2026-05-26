@@ -3,8 +3,15 @@ import react from '@vitejs/plugin-react'
 
 // Internal ALB DNS for backend routing (set by launch template user-data on AWS)
 // Locally falls back to localhost with direct service ports
-const INTERNAL_ALB = process.env.INTERNAL_ALB_DNS || 'http://localhost'
-const IS_AWS = !!process.env.INTERNAL_ALB_DNS
+let INTERNAL_ALB = process.env.INTERNAL_ALB_DNS || 'http://localhost'
+
+// Safety check: if the env var was set without http://, the Vite proxy will crash
+// with "Cannot read properties of null (reading 'split')"
+if (!INTERNAL_ALB.startsWith('http')) {
+  INTERNAL_ALB = `http://${INTERNAL_ALB}`
+}
+
+const IS_AWS = !!process.env.INTERNAL_ALB_DNS || INTERNAL_ALB.includes('amazonaws.com')
 
 // Helper: create proxy config that only proxies API calls (XHR/fetch),
 // not browser page navigations. This lets React Router handle SPA routes
