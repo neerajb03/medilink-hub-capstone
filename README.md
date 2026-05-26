@@ -151,14 +151,113 @@ Below are fixes for issues resolved during production testing:
 * **DateTime Shadowing:** Avoided namespace clashes in SQLAlchemy models by importing standard datetimes as `import datetime as dt`.
 * **Datetime Timezone Clashes:** Programmatically converted timezone-aware ISO string formats into offset-naive UTC dates inside `appointment-service` validator checks prior to inserting into PostgreSQL tables.
 
----
 
-## 📈 Roadmap to AWS EKS
-1. **Container Registry:** Push microservice Docker images to Amazon ECR.
-2. **Database Provisioning:** Migrate local PostgreSQL containers to highly available Amazon RDS.
-3. **Storage Migration:** Transition MinIO objects directly to secure AWS S3 buckets.
-4. **Kubernetes Manifests:** Create Deployment, Service, and Ingress manifests for deploying onto an Amazon EKS Cluster.
+## ☁️ AWS 3-Tier Production Architecture
+
+MediLink Hub is deployed on AWS using a production-grade 3-tier architecture spanning two Availability Zones in `us-east-1`, fully automated via **Terraform**.
+
+```mermaid
+graph TD
+    %% Internet & WAF
+    User((Client Browser)) -->|HTTP / Port 80| WAF[AWS WAFv2]
+    WAF -->|Filter Traffic| ExtALB[External Public ALB]
+
+    %% Public Subnets
+    subgraph VPC [Custom VPC - 10.0.0.0/16]
+        subgraph AZ_1A [Availability Zone: us-east-1a]
+            direction TB
+            subgraph Public_Subnet_1A [Public Subnet - 10.0.1.0/24]
+                NAT_1A[NAT Gateway 1A]
+                Bastion[Bastion Host]
+            end
+            subgraph Private_Front_1A [Frontend Subnet - 10.0.3.0/24]
+                Front_ASG_1A[Frontend Instance]
+            end
+            subgraph Private_Back_1A [Backend Subnet - 10.0.5.0/24]
+                Back_ASG_1A_User[User Service :8001]
+                Back_ASG_1A_Appt[Appointment Service :8002]
+                Back_ASG_1A_Health[Health Service :8003]
+                Back_ASG_1A_Doc[Document Service :8004]
+            end
+            subgraph Private_DB_1A [DB Subnet - 10.0.7.0/24]
+                RDS_Primary[(RDS PostgreSQL Primary)]
+            end
+        end
+
+        subgraph AZ_1B [Availability Zone: us-east-1b]
+            direction TB
+            subgraph Public_Subnet_1B [Public Subnet - 10.0.2.0/24]
+                NAT_1B[NAT Gateway 1B]
+            end
+            subgraph Private_Front_1B [Frontend Subnet - 10.0.4.0/24]
+                Front_ASG_1B[Frontend Instance]
+            end
+            subgraph Private_Back_1B [Backend Subnet - 10.0.6.0/24]
+                Back_ASG_1B[Backend Services]
+            end
+            subgraph Private_DB_1B [DB Subnet - 10.0.8.0/24]
+                RDS_Standby[(RDS Standby)]
+            end
+        end
+    end
+
+    %% Routing
+    ExtALB -->|Forward :3000| Front_ASG_1A
+    ExtALB -->|Forward :3000| Front_ASG_1B
+
+    Front_ASG_1A -->|Vite Proxy| IntALB[Internal Private ALB]
+    Front_ASG_1B -->|Vite Proxy| IntALB
+
+    IntALB -->|/login, /register, /me| Back_ASG_1A_User
+    IntALB -->|/appointments/*| Back_ASG_1A_Appt
+    IntALB -->|/records/*| Back_ASG_1A_Health
+    IntALB -->|/documents/*| Back_ASG_1A_Doc
+
+    %% Data Store
+    Back_ASG_1A_Doc -->|Secure S3 Access| S3[(Amazon S3 Bucket)]
+    Back_ASG_1A_User & Back_ASG_1A_Appt & Back_ASG_1A_Health & Back_ASG_1A_Doc --> RDS_Primary
+    RDS_Primary -.->|Multi-AZ Sync| RDS_Standby
+```
+
+### 🔒 Security Design (Zero-Trust)
+
+| Security Group | Source Allowed | Ports | Purpose |
+| :--- | :--- | :--- | :--- |
+| `bastion-sg` | Admin IP | `22` | SSH Access |
+| `external-alb-sg` | `0.0.0.0/0` | `80, 443` | Client Entrypoint (WAF Protected) |
+| `frontend-sg` | `external-alb-sg` | `3000` | Frontend Web Instances |
+| `internal-alb-sg` | `frontend-sg` | `80` | Private API Load Balancing |
+| `backend-sg` | `internal-alb-sg` | `8001-8004` | Microservice APIs |
+| `rds-sg` | `backend-sg`, `bastion-sg` | `5432` | Database Isolation |
+
+**Additional Security:**
+* **AWS WAFv2** with `AWSManagedRulesCommonRuleSet` attached to External ALB — blocks SQL injection, XSS, bad bots
+* **S3** — All public access blocked, AES-256 server-side encryption, IAM role-based access (no hardcoded keys)
+* **NAT Gateways** — Dual HA NAT gateways (one per AZ) for outbound internet from private subnets
+
+### 🏗️ Infrastructure as Code (Terraform)
+
+The entire infrastructure is automated with **8 Terraform files** managing **30+ AWS resources**:
+
+| File | Resources |
+| :--- | :--- |
+| `providers.tf` | AWS provider, region, default tags |
+| `vpc.tf` | VPC, 8 subnets, IGW, 2 NAT Gateways, route tables |
+| `security_groups.tf` | 6 security groups with least-privilege chain |
+| `s3.tf` | S3 bucket, encryption, IAM role + policy + instance profile |
+| `rds.tf` | DB subnet group, RDS PostgreSQL instance |
+| `load_balancers.tf` | WAF, External ALB, Internal ALB, 5 target groups, listener rules |
+| `autoscaling.tf` | 2 launch templates (AMI-based), 2 ASGs |
+| `outputs.tf` | External ALB DNS output |
+
+```bash
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
 
 ---
 
 *Made with ❤️ by the MediLink Hub Engineering Team.*
+
