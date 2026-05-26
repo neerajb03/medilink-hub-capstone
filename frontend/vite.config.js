@@ -31,15 +31,15 @@ export default defineConfig({
     allowedHosts: ['.amazonaws.com', 'localhost'],
     proxy: {
       // User service routes
-      '/register':     apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
-      '/login':        apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
-      '/me':           apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
+      '/register': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
+      '/login': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
+      '/me': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
       // Appointment service routes
       '/appointments': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8002`),
       // Health records service routes
-      '/records':      apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8003`),
+      '/records': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8003`),
       // Document service routes
-      '/documents':    apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8004`),
+      '/documents': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8004`),
     }
   }
 })
