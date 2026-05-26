@@ -236,7 +236,7 @@ resource "aws_lb_listener_rule" "appointments" {
 
   condition {
     path_pattern {
-      values = ["/api/appointments/*", "/appointments/*"]
+      values = ["/api/appointments/*", "/appointments/*", "/appointments"]
     }
   }
 }
@@ -253,7 +253,7 @@ resource "aws_lb_listener_rule" "health" {
 
   condition {
     path_pattern {
-      values = ["/api/records/*", "/records/*"]
+      values = ["/api/records/*", "/records/*", "/records"]
     }
   }
 }
@@ -270,7 +270,7 @@ resource "aws_lb_listener_rule" "documents" {
 
   condition {
     path_pattern {
-      values = ["/api/documents/*", "/documents/*"]
+      values = ["/api/documents/*", "/documents/*", "/documents"]
     }
   }
 }
