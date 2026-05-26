@@ -157,85 +157,92 @@ Below are fixes for issues resolved during production testing:
 MediLink Hub is deployed on AWS using a production-grade 3-tier architecture spanning two Availability Zones in `us-east-1`, fully automated via **Terraform**.
 
 ```mermaid
-architecture-beta
-    group aws(cloud)[AWS Cloud - us-east-1]
-    
-    group vpc(cloud)[VPC - 10.0.0.0/16] in aws
-    
-    group az1(cloud)[Availability Zone 1A] in vpc
-    group az2(cloud)[Availability Zone 1B] in vpc
-
-    service client(internet)[Client Browser]
-    service waf(server)[AWS WAFv2] in aws
-    
-    service ext_alb(server)[External ALB\nInternet Facing] in vpc
-    
-    service front1(server)[Frontend ASG\nReact + Vite] in az1
-    service front2(server)[Frontend ASG\nReact + Vite] in az2
-    
-    service int_alb(server)[Internal ALB\nPrivate Routing] in vpc
-    
-    service back1(server)[Backend ASG\n4x FastAPI Services] in az1
-    service back2(server)[Backend ASG\n4x FastAPI Services] in az2
-    
-    service s3(database)[Amazon S3\nDocument Storage] in aws
-    
-    service rds_master(database)[RDS PostgreSQL\nPrimary DB] in az1
-    service rds_replica(database)[RDS PostgreSQL\nStandby DB] in az2
-
-    client:R --> L:waf
-    waf:R --> L:ext_alb
-    
-    ext_alb:B --> T:front1
-    ext_alb:B --> T:front2
-    
-    front1:B --> T:int_alb
-    front2:B --> T:int_alb
-    
-    int_alb:B --> T:back1
-    int_alb:B --> T:back2
-    
-    back1:R --> L:s3
-    back2:R --> L:s3
-    
-    back1:B --> T:rds_master
-    back2:B --> T:rds_master
-    
-    rds_master:R --> L:rds_replica
-```
-
-### 🚦 Detailed Traffic & Microservice Flow
-
-```mermaid
 graph TD
-    %% Styling
     classDef client fill:#f9f9f9,stroke:#333,stroke-width:2px;
     classDef alb fill:#ff9900,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef react fill:#61dafb,stroke:#333,stroke-width:2px,color:#000;
-    classDef fastapi fill:#059669,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef waf fill:#dd1100,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef public fill:#e6f2ff,stroke:#0066cc,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef private_front fill:#e6ffe6,stroke:#009900,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef private_back fill:#fff0e6,stroke:#cc5200,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef private_db fill:#f9e6ff,stroke:#9900cc,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef compute fill:#f58536,stroke:#fff,stroke-width:2px,color:#fff;
     classDef db fill:#336791,stroke:#fff,stroke-width:2px,color:#fff;
     classDef s3 fill:#e3512b,stroke:#fff,stroke-width:2px,color:#fff;
 
-    Client([🌐 Client Browser]):::client -->|HTTPS Request| WAF[🛡️ AWS WAFv2]
-    WAF --> ExtALB[⚖️ External ALB]:::alb
-    ExtALB -->|Port 3000| ViteProxy[⚛️ React SPA / Vite Proxy <br/> EC2 Frontend ASG]:::react
-    
-    ViteProxy -->|/api/* or /*| IntALB[⚖️ Internal ALB]:::alb
-    
-    subgraph Backend Microservices [Python FastAPI EC2 ASG]
-        IntALB -->|/login, /register, /me| UserSvc[👤 User Service :8001]:::fastapi
-        IntALB -->|/appointments/*| ApptSvc[📅 Appointment Service :8002]:::fastapi
-        IntALB -->|/records/*| HealthSvc[❤️ Health Service :8003]:::fastapi
-        IntALB -->|/documents/*| DocSvc[📄 Document Service :8004]:::fastapi
+    %% Entrypoints
+    User([🌐 Client Browser]):::client -->|HTTPS / Port 443| WAF[🛡️ AWS WAFv2]:::waf
+    WAF -->|Filtered Traffic| ExtALB[⚖️ External Public ALB]:::alb
+
+    subgraph VPC [Custom VPC - 10.0.0.0/16]
+        
+        subgraph AZ_1A [Availability Zone: us-east-1a]
+            direction TB
+            subgraph Public_Subnet_1A [Public Subnet - 10.0.1.0/24]:::public
+                NAT_1A[🔄 NAT Gateway 1A]
+                Bastion[🛡️ Bastion Host]:::compute
+            end
+            subgraph Private_Front_1A [Frontend Subnet - 10.0.3.0/24]:::private_front
+                Front_ASG_1A[⚛️ Frontend ASG Instance<br/>React + Vite]:::compute
+            end
+            subgraph Private_Back_1A [Backend Subnet - 10.0.5.0/24]:::private_back
+                Back_ASG_1A_User[👤 User Service :8001]:::compute
+                Back_ASG_1A_Appt[📅 Appt Service :8002]:::compute
+                Back_ASG_1A_Health[❤️ Health Service :8003]:::compute
+                Back_ASG_1A_Doc[📄 Doc Service :8004]:::compute
+            end
+            subgraph Private_DB_1A [DB Subnet - 10.0.7.0/24]:::private_db
+                RDS_Primary[(🐘 RDS PostgreSQL<br/>Primary)]:::db
+            end
+        end
+
+        subgraph AZ_1B [Availability Zone: us-east-1b]
+            direction TB
+            subgraph Public_Subnet_1B [Public Subnet - 10.0.2.0/24]:::public
+                NAT_1B[🔄 NAT Gateway 1B]
+            end
+            subgraph Private_Front_1B [Frontend Subnet - 10.0.4.0/24]:::private_front
+                Front_ASG_1B[⚛️ Frontend ASG Instance<br/>React + Vite]:::compute
+            end
+            subgraph Private_Back_1B [Backend Subnet - 10.0.6.0/24]:::private_back
+                Back_ASG_1B[⚙️ Backend ASG Instances<br/>4x FastAPI Services]:::compute
+            end
+            subgraph Private_DB_1B [DB Subnet - 10.0.8.0/24]:::private_db
+                RDS_Standby[(🐘 RDS PostgreSQL<br/>Standby)]:::db
+            end
+        end
+        
+        %% Internal ALB sits across private frontend subnets
+        IntALB[⚖️ Internal Private ALB]:::alb
     end
+
+    %% Network Routing (External -> Frontend)
+    ExtALB -->|Forward :3000| Front_ASG_1A
+    ExtALB -->|Forward :3000| Front_ASG_1B
+
+    %% Network Routing (Frontend -> Internal ALB)
+    Front_ASG_1A -->|Vite Proxy API calls| IntALB
+    Front_ASG_1B -->|Vite Proxy API calls| IntALB
+
+    %% Network Routing (Internal ALB -> Backend Microservices)
+    IntALB -->|/login, /register| Back_ASG_1A_User
+    IntALB -->|/appointments/*| Back_ASG_1A_Appt
+    IntALB -->|/records/*| Back_ASG_1A_Health
+    IntALB -->|/documents/*| Back_ASG_1A_Doc
+    IntALB -.->|Load Balances to AZ 1B| Back_ASG_1B
+
+    %% Data Storage Routing
+    Back_ASG_1A_Doc -->|IAM Role Access| S3[(🪣 Amazon S3 Bucket<br/>Documents)]:::s3
+    Back_ASG_1B -.-> S3
     
-    %% Databases
-    UserSvc -->|user_db| RDS[(🐘 Amazon RDS PostgreSQL)]:::db
-    ApptSvc -->|appointment_db| RDS
-    HealthSvc -->|health_db| RDS
-    DocSvc -->|document_db| RDS
+    Back_ASG_1A_User & Back_ASG_1A_Appt & Back_ASG_1A_Health & Back_ASG_1A_Doc -->|DB Connections| RDS_Primary
+    Back_ASG_1B -.-> RDS_Primary
     
-    DocSvc -->|Presigned URLs / Uploads| S3Bucket[(🪣 Amazon S3)]:::s3
+    RDS_Primary -.->|Multi-AZ Sync| RDS_Standby
+    
+    %% Egress Routing
+    Front_ASG_1A -.->|Outbound Internet| NAT_1A
+    Back_ASG_1A_User -.->|Outbound Internet| NAT_1A
+    Front_ASG_1B -.->|Outbound Internet| NAT_1B
 ```
 
 ### 🔒 Security Design (Zero-Trust)
