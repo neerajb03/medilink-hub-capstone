@@ -144,36 +144,36 @@ graph TD
         
         subgraph AZ_1A [Availability Zone: us-east-1a]
             direction TB
-            subgraph Public_Subnet_1A [Public Subnet - 10.0.1.0/24]:::public
+            subgraph Public_Subnet_1A [Public Subnet - 10.0.1.0/24]
                 NAT_1A[🔄 NAT Gateway 1A]
                 Bastion[🛡️ Bastion Host]:::compute
             end
-            subgraph Private_Front_1A [Frontend Subnet - 10.0.3.0/24]:::private_front
+            subgraph Private_Front_1A [Frontend Subnet - 10.0.3.0/24]
                 Front_ASG_1A[⚛️ Frontend ASG Instance<br/>React + Vite]:::compute
             end
-            subgraph Private_Back_1A [Backend Subnet - 10.0.5.0/24]:::private_back
+            subgraph Private_Back_1A [Backend Subnet - 10.0.5.0/24]
                 Back_ASG_1A_User[👤 User Service :8001]:::compute
                 Back_ASG_1A_Appt[📅 Appt Service :8002]:::compute
                 Back_ASG_1A_Health[❤️ Health Service :8003]:::compute
                 Back_ASG_1A_Doc[📄 Doc Service :8004]:::compute
             end
-            subgraph Private_DB_1A [DB Subnet - 10.0.7.0/24]:::private_db
+            subgraph Private_DB_1A [DB Subnet - 10.0.7.0/24]
                 RDS_Primary[(🐘 RDS PostgreSQL<br/>Primary)]:::db
             end
         end
 
         subgraph AZ_1B [Availability Zone: us-east-1b]
             direction TB
-            subgraph Public_Subnet_1B [Public Subnet - 10.0.2.0/24]:::public
+            subgraph Public_Subnet_1B [Public Subnet - 10.0.2.0/24]
                 NAT_1B[🔄 NAT Gateway 1B]
             end
-            subgraph Private_Front_1B [Frontend Subnet - 10.0.4.0/24]:::private_front
+            subgraph Private_Front_1B [Frontend Subnet - 10.0.4.0/24]
                 Front_ASG_1B[⚛️ Frontend ASG Instance<br/>React + Vite]:::compute
             end
-            subgraph Private_Back_1B [Backend Subnet - 10.0.6.0/24]:::private_back
+            subgraph Private_Back_1B [Backend Subnet - 10.0.6.0/24]
                 Back_ASG_1B[⚙️ Backend ASG Instances<br/>4x FastAPI Services]:::compute
             end
-            subgraph Private_DB_1B [DB Subnet - 10.0.8.0/24]:::private_db
+            subgraph Private_DB_1B [DB Subnet - 10.0.8.0/24]
                 RDS_Standby[(🐘 RDS PostgreSQL<br/>Standby)]:::db
             end
         end
@@ -210,6 +210,12 @@ graph TD
     Front_ASG_1A -.->|Outbound Internet| NAT_1A
     Back_ASG_1A_User -.->|Outbound Internet| NAT_1A
     Front_ASG_1B -.->|Outbound Internet| NAT_1B
+    
+    %% Apply Subgraph Styles
+    class Public_Subnet_1A,Public_Subnet_1B public;
+    class Private_Front_1A,Private_Front_1B private_front;
+    class Private_Back_1A,Private_Back_1B private_back;
+    class Private_DB_1A,Private_DB_1B private_db;
 ```
 
 ### 🔒 Security Design (Zero-Trust)
