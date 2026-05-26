@@ -35,7 +35,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: ['.amazonaws.com', 'localhost'],
+    allowedHosts: ['.amazonaws.com', '.medimesh-project.online', 'localhost'],
     proxy: {
       // User service routes
       '/register': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
