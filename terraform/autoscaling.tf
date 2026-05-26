@@ -53,8 +53,12 @@ resource "aws_launch_template" "frontend" {
               export INTERNAL_ALB_DNS="http://${aws_lb.internal.dns_name}"
               echo "INTERNAL_ALB_DNS=$INTERNAL_ALB_DNS"
 
-              # Start the Vite dev server (node_modules already installed in AMI)
-              cd /home/ubuntu/medilink-hub/frontend
+              # Pull latest fixes from GitHub
+              cd /home/ubuntu/medilink-hub
+              git pull origin main
+
+              # Start the Vite dev server
+              cd frontend
               nohup npm run dev -- --host 0.0.0.0 --port 3000 > /var/log/frontend.log 2>&1 &
               echo "Frontend started with PID $!"
               EOF
