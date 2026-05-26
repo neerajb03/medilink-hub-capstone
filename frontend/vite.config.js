@@ -6,6 +6,23 @@ import react from '@vitejs/plugin-react'
 const INTERNAL_ALB = process.env.INTERNAL_ALB_DNS || 'http://localhost'
 const IS_AWS = !!process.env.INTERNAL_ALB_DNS
 
+// Helper: create proxy config that only proxies API calls (XHR/fetch),
+// not browser page navigations. This lets React Router handle SPA routes
+// while still proxying AJAX calls to the backend.
+function apiProxy(target) {
+  return {
+    target,
+    changeOrigin: true,
+    // If the browser is navigating to this path (Accept: text/html),
+    // serve the SPA instead of proxying to the backend
+    bypass(req) {
+      if (req.headers.accept && req.headers.accept.includes('text/html')) {
+        return '/index.html'
+      }
+    }
+  }
+}
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -14,15 +31,16 @@ export default defineConfig({
     allowedHosts: ['.amazonaws.com', 'localhost'],
     proxy: {
       // User service routes
-      '/register':     { target: IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`, changeOrigin: true },
-      '/login':        { target: IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`, changeOrigin: true },
-      '/me':           { target: IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`, changeOrigin: true },
+      '/register':     apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
+      '/login':        apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
+      '/me':           apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),
       // Appointment service routes
-      '/appointments': { target: IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8002`, changeOrigin: true },
+      '/appointments': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8002`),
       // Health records service routes
-      '/records':      { target: IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8003`, changeOrigin: true },
+      '/records':      apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8003`),
       // Document service routes
-      '/documents':    { target: IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8004`, changeOrigin: true },
+      '/documents':    apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8004`),
     }
   }
 })
+
