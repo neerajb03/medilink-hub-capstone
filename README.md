@@ -10,40 +10,7 @@ Featuring a modern **Glassmorphism SPA Dashboard** built in React (Vite) and orc
 
 MediLink Hub is architected following strict microservices principles. Each service runs in isolation, manages its own dedicated PostgreSQL database, and communicates via defined REST APIs.
 
-```mermaid
-graph TD
-    %% Clients
-    User[React SPA Frontend\nPort 3000]
-    
-    %% API Services & Gateways
-    subgraph Microservices
-        US[User Service\nPort 8001]
-        AS[Appointment Service\nPort 8002]
-        HS[Health Records Service\nPort 8003]
-        DS[Document Service\nPort 8004]
-    end
-
-    %% Storage & DBs
-    subgraph Databases & Storage
-        UPG[(Postgres DB: user_db)]
-        APG[(Postgres DB: appointment_db)]
-        HPG[(Postgres DB: health_db)]
-        DPG[(Postgres DB: document_db)]
-        MIN[(MinIO Object Storage\nPort 9000/9001)]
-    end
-
-    %% Connections
-    User -->|Auth & Users| US
-    User -->|Schedules| AS
-    User -->|Medical Records| HS
-    User -->|File Uploads| DS
-
-    US ---> UPG
-    AS ---> APG
-    HS ---> HPG
-    DS ---> DPG
-    DS --->|Secure S3 storage| MIN
-```
+*Please see the **[AWS 3-Tier Production Architecture](#-aws-3-tier-production-architecture)** section below for the complete, detailed infrastructure diagram including VPCs, ALBs, ASGs, WAF, S3, and RDS.*
 
 ---
 
