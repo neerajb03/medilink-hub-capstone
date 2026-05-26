@@ -30,33 +30,31 @@ resource "aws_launch_template" "frontend" {
     security_groups             = [aws_security_group.frontend_asg.id]
   }
 
+  # AMI Prerequisites:
+  #   1. Node.js 18 installed
+  #   2. Repo cloned at /home/ubuntu/medilink-hub
+  #   3. npm install already completed in /home/ubuntu/medilink-hub/frontend
+  #
+  # To build the AMI:
+  #   - Launch an Ubuntu instance
+  #   - curl -fsSL https://deb.nodesource.com/setup_18.x | sudo bash -
+  #   - sudo apt-get install -y nodejs
+  #   - cd /home/ubuntu && git clone https://github.com/neerajb03/medilink-hub.git
+  #   - cd medilink-hub/frontend && npm install
+  #   - Create AMI from that instance
+  #   - Set frontend_ami_id to the new AMI ID
+
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              # Removed manual exec redirect so output goes to standard cloud-init-output.log (visible in EC2 System Log)
-              echo "=== MediLink Frontend Bootstrap ==="
+              echo "=== MediLink Frontend Bootstrap (AMI-based) ==="
               date
-
-              # Install dependencies if missing
-              apt-get update
-              which git || apt-get install -y git
-              which node || {
-                curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-                apt-get install -y nodejs
-              }
-
-              # Clone latest code from GitHub (Force clean clone)
-              cd /home/ubuntu
-              rm -rf medilink-hub
-              git clone https://github.com/neerajb03/medilink-hub.git
-              cd medilink-hub
-
-              # Install frontend dependencies
-              cd /home/ubuntu/medilink-hub/frontend
-              npm install
 
               # Set Internal ALB DNS for Vite proxy (server-side routing to backends)
               export INTERNAL_ALB_DNS="http://${aws_lb.internal.dns_name}"
               echo "INTERNAL_ALB_DNS=$INTERNAL_ALB_DNS"
+
+              # Start the Vite dev server (node_modules already installed in AMI)
+              cd /home/ubuntu/medilink-hub/frontend
               nohup npm run dev -- --host 0.0.0.0 --port 3000 > /var/log/frontend.log 2>&1 &
               echo "Frontend started with PID $!"
               EOF
