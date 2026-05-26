@@ -32,9 +32,7 @@ export default function Documents() {
     formData.append('file', file)
 
     try {
-      await documentApi.post('/documents/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      await documentApi.post('/documents/upload', formData)
       setSuccess(`"${file.name}" uploaded successfully!`)
       fetchDocuments()
     } catch (err) {
