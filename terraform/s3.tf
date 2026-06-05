@@ -9,8 +9,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "documents_enc" {
   bucket = aws_s3_bucket.documents.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.medilink.arn
     }
+    bucket_key_enabled = true
   }
 }
 
@@ -24,8 +26,8 @@ resource "aws_s3_bucket_public_access_block" "documents_block" {
 }
 
 # --- IAM Policy for Private EC2 Instances to Access S3 Bucket ---
-resource "aws_iam_role" "backend_s3" {
-  name = "medilink-backend-s3-role"
+resource "aws_iam_role" "backend" {
+  name = "medilink-backend-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -41,14 +43,16 @@ resource "aws_iam_role" "backend_s3" {
   })
 }
 
-resource "aws_iam_policy" "s3_access" {
-  name        = "medilink-s3-access-policy"
-  description = "Permits document service instances to upload and read medical files"
+resource "aws_iam_role_policy" "backend_consolidated" {
+  name = "medilink-backend-consolidated-policy"
+  role = aws_iam_role.backend.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # S3 Access
       {
+        Sid    = "S3Access"
         Effect = "Allow"
         Action = [
           "s3:PutObject",
@@ -58,22 +62,88 @@ resource "aws_iam_policy" "s3_access" {
         Resource = "${aws_s3_bucket.documents.arn}/*"
       },
       {
+        Sid    = "S3List"
         Effect = "Allow"
         Action = [
           "s3:ListBucket"
         ]
         Resource = aws_s3_bucket.documents.arn
+      },
+      # Secrets Manager
+      {
+        Sid    = "SecretsManagerAccess"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.db_credentials.arn,
+          aws_secretsmanager_secret.jwt_secret.arn
+        ]
+      },
+      # KMS Encrypt + Decrypt
+      {
+        Sid    = "KMSUsage"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GenerateDataKey"
+        ]
+        Resource = aws_kms_key.medilink.arn
+      },
+      # SQS (Send only)
+      {
+        Sid    = "SQSSend"
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage"
+        ]
+        Resource = aws_sqs_queue.appointment_events.arn
+      },
+      # CloudWatch Logs
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups"
+        ]
+        Resource = "arn:aws:logs:us-east-1:*:log-group:/medilink/*"
+      },
+      # CloudWatch Metrics
+      {
+        Sid    = "CloudWatchMetrics"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "MediLink/Backend"
+          }
+        }
+      },
+      # SSM for CloudWatch Agent
+      {
+        Sid    = "SSMForCloudWatchAgent"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = "arn:aws:ssm:us-east-1:*:parameter/AmazonCloudWatch-*"
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "backend_s3" {
-  role       = aws_iam_role.backend_s3.name
-  policy_arn = aws_iam_policy.s3_access.arn
-}
-
 resource "aws_iam_instance_profile" "backend" {
   name = "medilink-backend-instance-profile"
-  role = aws_iam_role.backend_s3.name
+  role = aws_iam_role.backend.name
 }

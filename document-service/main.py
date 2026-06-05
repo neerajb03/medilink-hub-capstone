@@ -5,6 +5,9 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile
+from logging_config import setup_logger
+
+logger = setup_logger("document-service")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -19,7 +22,8 @@ from botocore.client import Config
 from auth.jwt import get_current_user
 
 # --- Database ---
-engine = create_async_engine(os.getenv("DATABASE_URL"))
+from aws_utils import get_database_url
+engine = create_async_engine(get_database_url("document_db"))
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

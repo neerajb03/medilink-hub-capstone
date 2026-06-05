@@ -4,6 +4,9 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Request
+from logging_config import setup_logger
+
+logger = setup_logger("health-service")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -17,7 +20,8 @@ from sqlalchemy.future import select
 from auth.jwt import get_current_user
 
 # --- Database ---
-engine = create_async_engine(os.getenv("DATABASE_URL"))
+from aws_utils import get_database_url
+engine = create_async_engine(get_database_url("health_db"))
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -176,3 +180,45 @@ async def list_records(
         }
         for r in records
     ]
+
+class ChatRequest(BaseModel):
+    message: str
+
+import httpx
+from aws_utils import get_secret
+
+@app.post("/chat")
+async def chat_with_ai(
+    data: ChatRequest,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if user["role"] != "patient":
+        raise HTTPException(status_code=403, detail="Only patients can use the symptom checker")
+
+    hf_token = get_secret("medilink/production/hf-api-key")
+    if not hf_token or hf_token == "REPLACE_ME_MANUALLY_IN_CONSOLE":
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    headers = {"Authorization": f"Bearer {hf_token}"}
+    payload = {
+        "inputs": f"Patient symptoms: {data.message}. What could this be? Keep it brief and suggest consulting a doctor.",
+        "parameters": {"max_new_tokens": 100}
+    }
+    
+    # Using Mistral 7B via Hugging Face Serverless Inference API
+    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(API_URL, headers=headers, json=payload, timeout=10.0)
+            if resp.status_code != 200:
+                print(f"HF Error: {resp.status_code} - {resp.text}")
+                raise HTTPException(status_code=500, detail="AI processing failed")
+            
+            result = resp.json()
+            reply = result[0].get("generated_text", "Sorry, I could not process your symptoms.").replace(payload["inputs"], "").strip()
+            return {"reply": reply}
+        except Exception as e:
+            print(f"Chat error: {e}")
+            raise HTTPException(status_code=500, detail="Failed to connect to AI service")

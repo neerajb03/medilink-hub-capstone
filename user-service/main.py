@@ -4,6 +4,9 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Request
+from logging_config import setup_logger
+
+logger = setup_logger("user-service")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -31,7 +34,8 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 # --- Database ---
-engine = create_async_engine(os.getenv("DATABASE_URL"))
+from aws_utils import get_database_url
+engine = create_async_engine(get_database_url("user_db"))
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -140,6 +144,17 @@ async def health():
 
 @app.post("/register", status_code=201)
 async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    if data.role != "patient":
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "Only patients can self-register. Doctors must be added by administrators."
+                }
+            }
+        )
+
     # Check if email already exists
     result = await db.execute(select(User).where(User.email == data.email))
     existing = result.scalar_one_or_none()
@@ -195,23 +210,36 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @app.get("/me")
-async def me(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == user["user_id"]))
-    db_user = result.scalar_one_or_none()
-    if not db_user:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": "User not found",
-                    "details": "",
-                }
-            },
-        )
+async def get_me(
+    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(User).where(User.id == current_user["user_id"]))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     return {
-        "id": str(db_user.id),
-        "name": db_user.name,
-        "email": db_user.email,
-        "role": db_user.role,
+        "id": str(user.id),
+        "name": user.name,
+        "email": user.email,
+        "role": user.role,
+        "created_at": user.created_at.isoformat(),
+    }
+
+
+@app.get("/users/{user_id}")
+async def get_user_by_id(
+    user_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": str(user.id),
+        "name": user.name,
+        "role": user.role,
     }

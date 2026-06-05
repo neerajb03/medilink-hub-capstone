@@ -22,3 +22,28 @@ output "s3_bucket_name" {
   description = "S3 Medical Files Bucket Name"
   value       = aws_s3_bucket.documents.bucket
 }
+
+output "kms_key_arn" {
+  description = "KMS key ARN used for encryption"
+  value       = aws_kms_key.medilink.arn
+}
+
+output "secrets_manager_db_arn" {
+  description = "Secrets Manager ARN for DB credentials"
+  value       = aws_secretsmanager_secret.db_credentials.arn
+}
+
+output "sns_topic_arn" {
+  description = "SNS topic ARN for appointment notifications"
+  value       = aws_sns_topic.appointment_notifications.arn
+}
+
+output "sqs_queue_url" {
+  description = "SQS queue URL for appointment events"
+  value       = aws_sqs_queue.appointment_events.url
+}
+
+output "ops_alarm_topic_arn" {
+  description = "SNS topic ARN for operational alarms"
+  value       = aws_sns_topic.ops_alarms.arn
+}

@@ -3,7 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 import os
 
-SECRET = os.getenv("JWT_SECRET", "supersecret")
+from aws_utils import get_jwt_secret
+SECRET = get_jwt_secret()
 ALGORITHM = "HS256"
 bearer = HTTPBearer()
 

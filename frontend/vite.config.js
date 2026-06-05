@@ -35,7 +35,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: ['.amazonaws.com', '.medimesh-project.online', 'localhost'],
+    allowedHosts: true,  // Allow all hosts — ALB + WAF handle host validation in production
     proxy: {
       // User service routes
       '/register': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8001`),

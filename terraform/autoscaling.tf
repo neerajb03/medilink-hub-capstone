@@ -30,35 +30,32 @@ resource "aws_launch_template" "frontend" {
     security_groups             = [aws_security_group.frontend_asg.id]
   }
 
-  # AMI Prerequisites:
-  #   1. Node.js 18 installed
-  #   2. Repo cloned at /home/ubuntu/medilink-hub
-  #   3. npm install already completed in /home/ubuntu/medilink-hub/frontend
-  #
-  # To build the AMI:
-  #   - Launch an Ubuntu instance
-  #   - curl -fsSL https://deb.nodesource.com/setup_18.x | sudo bash -
-  #   - sudo apt-get install -y nodejs
-  #   - cd /home/ubuntu && git clone https://github.com/neerajb03/medilink-hub.git
-  #   - cd medilink-hub/frontend && npm install
-  #   - Create AMI from that instance
-  #   - Set frontend_ami_id to the new AMI ID
+  # No custom AMI needed — everything is pulled from GitHub at boot time
+  # (same approach as the backend launch template)
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              echo "=== MediLink Frontend Bootstrap (AMI-based) ==="
+              echo "=== MediLink Frontend Bootstrap ==="
               date
+
+              # Install Node.js 18 if not present
+              if ! which node > /dev/null 2>&1; then
+                curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+                apt-get install -y nodejs
+              fi
+
+              # Clone latest code from GitHub (force clean clone)
+              cd /home/ubuntu
+              rm -rf medilink-hub
+              git clone https://github.com/neerajb03/medilink-hub.git
+              cd medilink-hub/frontend
 
               # Set Internal ALB DNS for Vite proxy (server-side routing to backends)
               export INTERNAL_ALB_DNS="http://${aws_lb.internal.dns_name}"
               echo "INTERNAL_ALB_DNS=$INTERNAL_ALB_DNS"
 
-              # Pull latest fixes from GitHub
-              cd /home/ubuntu/medilink-hub
-              git pull origin main
-
-              # Start the Vite dev server
-              cd frontend
+              # Install dependencies and start
+              npm install
               nohup npm run dev -- --host 0.0.0.0 --port 3000 > /var/log/frontend.log 2>&1 &
               echo "Frontend started with PID $!"
               EOF
@@ -97,6 +94,7 @@ resource "aws_launch_template" "backend" {
               which git  || apt-get install -y git
               which pip3 || apt-get install -y python3-pip python3-venv
               which psql || apt-get install -y postgresql-client
+              which jq   || apt-get install -y jq
 
               # Clone latest code from GitHub (Force clean clone)
               cd /home/ubuntu
@@ -108,7 +106,8 @@ resource "aws_launch_template" "backend" {
               RDS_HOST="${aws_db_instance.postgres.address}"
               RDS_PORT="5432"
               RDS_USER="dbadmin"
-              RDS_PASS="ProductionStrongPassword123!"
+              # Fetch DB Password dynamically using Instance Profile IAM Role
+              RDS_PASS=$(aws secretsmanager get-secret-value --region us-east-1 --secret-id ${aws_secretsmanager_secret.db_credentials.id} --query SecretString --output text | jq -r .password)
 
               # Create individual databases if they don't exist
               export PGPASSWORD="$RDS_PASS"
@@ -122,7 +121,7 @@ resource "aws_launch_template" "backend" {
               export S3_BUCKET_NAME="${aws_s3_bucket.documents.bucket}"
               export S3_ENDPOINT=""
               export AWS_DEFAULT_REGION="us-east-1"
-              export JWT_SECRET="supersecret"
+              export SQS_QUEUE_URL="${aws_sqs_queue.appointment_events.url}"
 
               # Setup Python Virtual Environment
               cd /home/ubuntu/medilink-hub
@@ -219,5 +218,20 @@ resource "aws_autoscaling_group" "backend" {
     key                 = "Name"
     value               = "medilink-backend-server"
     propagate_at_launch = true
+  }
+  }
+}
+
+# --- Dynamic Target Tracking Auto Scaling ---
+resource "aws_autoscaling_policy" "backend_cpu_tracking" {
+  name                   = "medilink-backend-cpu-tracking"
+  autoscaling_group_name = aws_autoscaling_group.backend.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 50.0
   }
 }

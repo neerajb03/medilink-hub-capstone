@@ -4,6 +4,9 @@ import datetime as dt
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Request
+from logging_config import setup_logger
+
+logger = setup_logger("appointment-service")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -14,10 +17,35 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.future import select
 
+import httpx
+import boto3
+import json
+
 from auth.jwt import get_current_user
 
+# --- SQS Helper ---
+sqs = boto3.client('sqs', region_name='us-east-1')
+SQS_QUEUE_URL = os.getenv("SQS_QUEUE_URL")
+
+def publish_appointment_event(appointment_id: str, user_id: str, status: str):
+    if not SQS_QUEUE_URL:
+        print(f"Warning: SQS_QUEUE_URL not set. Skipping event for {appointment_id}")
+        return
+    try:
+        sqs.send_message(
+            QueueUrl=SQS_QUEUE_URL,
+            MessageBody=json.dumps({
+                "appointment_id": str(appointment_id),
+                "user_id": str(user_id),
+                "status": status
+            })
+        )
+    except Exception as e:
+        print(f"Failed to publish SQS message: {e}")
+
 # --- Database ---
-engine = create_async_engine(os.getenv("DATABASE_URL"))
+from aws_utils import get_database_url
+engine = create_async_engine(get_database_url("appointment_db"))
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -144,6 +172,16 @@ async def create_appointment(
                 }
             },
         )
+        
+    if data.doctor_id:
+        # Cross-service validation: ensure the assigned doctor exists and is actually a doctor
+        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        # In a real microservice environment, you'd use service discovery or the internal ALB
+        # We assume the ALB routes /users to user-service
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{INTERNAL_ALB_DNS}/users/{data.doctor_id}")
+            if resp.status_code != 200 or resp.json().get("role") != "doctor":
+                raise HTTPException(status_code=400, detail="Invalid doctor ID or user is not a doctor")
 
     appt = Appointment(
         user_id=user["user_id"],
@@ -155,6 +193,8 @@ async def create_appointment(
     await db.commit()
     await db.refresh(appt)
 
+    publish_appointment_event(str(appt.id), str(appt.user_id), "pending")
+
     return {
         "id": str(appt.id),
         "user_id": str(appt.user_id),
@@ -162,6 +202,32 @@ async def create_appointment(
         "datetime": appt.datetime.isoformat(),
         "status": appt.status,
     }
+
+
+@app.put("/appointments/{appt_id}/accept")
+async def accept_appointment(
+    appt_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if user["role"] != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctors can accept appointments")
+        
+    result = await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    if str(appt.doctor_id) != user["user_id"]:
+        raise HTTPException(status_code=403, detail="You are not the assigned doctor")
+        
+    appt.status = "accepted"
+    await db.commit()
+    await db.refresh(appt)
+    
+    publish_appointment_event(str(appt.id), str(appt.user_id), "accepted")
+    
+    return {"status": "success", "appointment_id": str(appt.id)}
 
 
 @app.get("/appointments")
