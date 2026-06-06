@@ -14,7 +14,10 @@ resource "aws_vpc_endpoint" "private_link" {
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.region}.${each.key}"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
+  subnet_ids          = [
+    aws_subnet.private_back_a.id,
+    aws_subnet.private_back_b.id
+  ]
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
 
@@ -26,7 +29,10 @@ resource "aws_vpc_endpoint" "s3_gateway" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.region}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = aws_route_table.private[*].id
+  route_table_ids   = [
+    aws_route_table.private_a.id,
+    aws_route_table.private_b.id
+  ]
 
   tags = { Name = "medilink-endpoint-s3" }
 }
