@@ -22,7 +22,7 @@ This repository contains a fully decoupled, highly available, and secure product
 *   **Target Tracking Policies**: The backend Auto Scaling Group (ASG) utilizes an `ASGAverageCPUUtilization` policy targeted at 50%, ensuring the microservices scale out dynamically under load and scale in to save costs during idle periods.
 
 ### 5. AI Symptom Checker Integration
-*   **Hugging Face Serverless Inference**: The `health-service` integrates an asynchronous AI symptom checker powered by `Mistral-7B-Instruct-v0.2`, keeping the architecture lean while providing powerful AI capabilities.
+*   **Hugging Face Serverless Inference**: The `health-service` integrates an asynchronous AI symptom checker powered by `HuggingFaceH4/zephyr-7b-beta`, keeping the architecture lean while providing powerful AI capabilities.
 
 ### 6. Observability
 *   **CloudWatch Logging**: All microservices use structured JSON logging.

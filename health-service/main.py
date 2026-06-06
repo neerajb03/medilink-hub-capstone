@@ -206,8 +206,8 @@ async def chat_with_ai(
         "parameters": {"max_new_tokens": 100}
     }
     
-    # Using Mistral 7B via Hugging Face Serverless Inference API
-    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+    # Using Zephyr 7B Beta via Hugging Face Serverless Inference API
+    API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
     
     async with httpx.AsyncClient() as client:
         try:
