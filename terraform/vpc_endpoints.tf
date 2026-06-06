@@ -1,3 +1,5 @@
+data "aws_region" "current" {}
+
 locals {
   services = [
     "secretsmanager",
@@ -12,7 +14,7 @@ resource "aws_vpc_endpoint" "private_link" {
   for_each = toset(local.services)
 
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${var.region}.${each.key}"
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.${each.key}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [
     aws_subnet.private_back_a.id,
@@ -27,7 +29,7 @@ resource "aws_vpc_endpoint" "private_link" {
 # --- S3 Gateway Endpoint ---
 resource "aws_vpc_endpoint" "s3_gateway" {
   vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${var.region}.s3"
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [
     aws_route_table.private_a.id,
