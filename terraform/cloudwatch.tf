@@ -28,7 +28,7 @@ resource "aws_sns_topic" "ops_alarms" {
 resource "aws_sns_topic_subscription" "ops_email" {
   topic_arn = aws_sns_topic.ops_alarms.arn
   protocol  = "email"
-  endpoint  = "ops@medilink.com" # Placeholder for the ops team
+  endpoint  = "medilinkhub.team@gmail.com" # Placeholder for the ops team
 }
 
 # --- MVP CloudWatch Alarms ---
