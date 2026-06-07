@@ -147,3 +147,9 @@ resource "aws_iam_instance_profile" "backend" {
   name = "medilink-backend-instance-profile"
   role = aws_iam_role.backend.name
 }
+
+# Attach AWS managed policy for Systems Manager (SSM) Session Manager access
+resource "aws_iam_role_policy_attachment" "backend_ssm" {
+  role       = aws_iam_role.backend.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
