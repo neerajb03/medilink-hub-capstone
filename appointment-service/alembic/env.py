@@ -57,6 +57,20 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    from aws_utils import get_database_url
+    # Make sure to import models here for autogenerate
+    # from main import Base
+    # target_metadata = Base.metadata
+
+    url = get_database_url("appointment_db")
+    
+    # We have to swap asyncpg for psycopg2 since Alembic usually runs synchronously
+    # Or we can run it asynchronously. Since we use `engine_from_config` default, it's sync.
+    # Actually, aws_utils returns postgresql+asyncpg://...
+    sync_url = url.replace("postgresql+asyncpg://", "postgresql://")
+    
+    config.set_main_option("sqlalchemy.url", sync_url)
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
