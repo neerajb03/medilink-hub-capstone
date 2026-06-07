@@ -33,32 +33,32 @@ resource "aws_launch_template" "frontend" {
   # No custom AMI needed — everything is pulled from GitHub at boot time
   # (same approach as the backend launch template)
 
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              echo "=== MediLink Frontend Bootstrap ==="
-              date
+  user_data = base64encode(<<EOF
+#!/bin/bash
+echo "=== MediLink Frontend Bootstrap ==="
+date
 
-              # Install Node.js 18 if not present
-              if ! which node > /dev/null 2>&1; then
-                curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-                apt-get install -y nodejs
-              fi
+# Install Node.js 18 if not present
+if ! which node > /dev/null 2>&1; then
+  curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+  apt-get install -y nodejs
+fi
 
-              # Clone latest code from GitHub (force clean clone)
-              cd /home/ubuntu
-              rm -rf medilink-hub
-              git clone https://github.com/neerajb03/medilink-hub.git
-              cd medilink-hub/frontend
+# Clone latest code from GitHub (force clean clone)
+cd /home/ubuntu
+rm -rf medilink-hub
+git clone https://github.com/neerajb03/medilink-hub.git
+cd medilink-hub/frontend
 
-              # Set Internal ALB DNS for Vite proxy (server-side routing to backends)
-              export INTERNAL_ALB_DNS="http://${aws_lb.internal.dns_name}"
-              echo "INTERNAL_ALB_DNS=$INTERNAL_ALB_DNS"
+# Set Internal ALB DNS for Vite proxy (server-side routing to backends)
+export INTERNAL_ALB_DNS="http://${aws_lb.internal.dns_name}"
+echo "INTERNAL_ALB_DNS=$INTERNAL_ALB_DNS"
 
-              # Install dependencies and start
-              npm install
-              nohup npm run dev -- --host 0.0.0.0 --port 3000 > /var/log/frontend.log 2>&1 &
-              echo "Frontend started with PID $!"
-              EOF
+# Install dependencies and start
+npm install
+nohup npm run dev -- --host 0.0.0.0 --port 3000 > /var/log/frontend.log 2>&1 &
+echo "Frontend started with PID $!"
+EOF
   )
 
   tag_specifications {
@@ -83,30 +83,30 @@ resource "aws_launch_template" "backend" {
     security_groups             = [aws_security_group.backend_asg.id]
   }
 
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              # Removed manual exec redirect so output goes to standard cloud-init-output.log (visible in EC2 System Log)
-              echo "=== MediLink Backend Bootstrap ==="
-              date
+  user_data = base64encode(<<EOF
+#!/bin/bash
+# Removed manual exec redirect so output goes to standard cloud-init-output.log (visible in EC2 System Log)
+echo "=== MediLink Backend Bootstrap ==="
+date
 
-              # Install dependencies if missing
-              apt-get update
-              which git  || apt-get install -y git
-              which pip3 || apt-get install -y python3-pip python3-venv
-              which psql || apt-get install -y postgresql-client
-              which jq   || apt-get install -y jq
-              # Install AWS CLI (not pre-installed on Ubuntu AMIs)
-              which aws  || apt-get install -y awscli
+# Install dependencies if missing
+apt-get update
+which git  || apt-get install -y git
+which pip3 || apt-get install -y python3-pip python3-venv
+which psql || apt-get install -y postgresql-client
+which jq   || apt-get install -y jq
+# Install AWS CLI (not pre-installed on Ubuntu AMIs)
+which aws  || apt-get install -y awscli
 
-              # Clone latest code from GitHub (Force clean clone)
-              cd /home/ubuntu
-              rm -rf medilink-hub
-              git clone https://github.com/neerajb03/medilink-hub.git
-              cd medilink-hub
+# Clone latest code from GitHub (Force clean clone)
+cd /home/ubuntu
+rm -rf medilink-hub
+git clone https://github.com/neerajb03/medilink-hub.git
+cd medilink-hub
 
-              # Create individual databases using Python/boto3 to avoid
-              # shell quoting issues with special characters in the RDS password
-              python3 -c "
+# Create individual databases using Python/boto3 to avoid
+# shell quoting issues with special characters in the RDS password
+python3 -c "
 import subprocess, json, os, sys
 try:
     import boto3
@@ -122,42 +122,42 @@ for db in ['user_db', 'appointment_db', 'health_db', 'document_db']:
     print(f'{db}: Created' if r.returncode == 0 else f'{db}: {r.stderr.strip()}')
 "
 
-              export S3_BUCKET_NAME="${aws_s3_bucket.documents.bucket}"
-              export S3_ENDPOINT=""
-              export AWS_DEFAULT_REGION="us-east-1"
-              export SQS_QUEUE_URL="${aws_sqs_queue.appointment_events.url}"
+export S3_BUCKET_NAME="${aws_s3_bucket.documents.bucket}"
+export S3_ENDPOINT=""
+export AWS_DEFAULT_REGION="us-east-1"
+export SQS_QUEUE_URL="${aws_sqs_queue.appointment_events.url}"
 
-              # Setup Python Virtual Environment
-              cd /home/ubuntu/medilink-hub
-              python3 -m venv venv
-              source venv/bin/activate
+# Setup Python Virtual Environment
+cd /home/ubuntu/medilink-hub
+python3 -m venv venv
+source venv/bin/activate
 
-              # Start each service (credentials fetched from Secrets Manager via aws_utils.py)
-              echo "Starting user-service..."
-              cd /home/ubuntu/medilink-hub/user-service
-              pip install -r requirements.txt
-              nohup uvicorn main:app --host 0.0.0.0 --port 8001 > /var/log/user-service.log 2>&1 &
+# Start each service (credentials fetched from Secrets Manager via aws_utils.py)
+echo "Starting user-service..."
+cd /home/ubuntu/medilink-hub/user-service
+pip install -r requirements.txt
+nohup uvicorn main:app --host 0.0.0.0 --port 8001 > /var/log/user-service.log 2>&1 &
 
-              echo "Starting appointment-service..."
-              cd /home/ubuntu/medilink-hub/appointment-service
-              pip install -r requirements.txt
-              python3 -m alembic upgrade head
-              nohup uvicorn main:app --host 0.0.0.0 --port 8002 > /var/log/appointment-service.log 2>&1 &
+echo "Starting appointment-service..."
+cd /home/ubuntu/medilink-hub/appointment-service
+pip install -r requirements.txt
+python3 -m alembic upgrade head
+nohup uvicorn main:app --host 0.0.0.0 --port 8002 > /var/log/appointment-service.log 2>&1 &
 
-              echo "Starting health-service..."
-              cd /home/ubuntu/medilink-hub/health-service
-              pip install -r requirements.txt
-              python3 -m alembic upgrade head
-              nohup uvicorn main:app --host 0.0.0.0 --port 8003 > /var/log/health-service.log 2>&1 &
+echo "Starting health-service..."
+cd /home/ubuntu/medilink-hub/health-service
+pip install -r requirements.txt
+python3 -m alembic upgrade head
+nohup uvicorn main:app --host 0.0.0.0 --port 8003 > /var/log/health-service.log 2>&1 &
 
-              echo "Starting document-service..."
-              cd /home/ubuntu/medilink-hub/document-service
-              pip install -r requirements.txt
-              python3 -m alembic upgrade head
-              nohup uvicorn main:app --host 0.0.0.0 --port 8004 > /var/log/document-service.log 2>&1 &
+echo "Starting document-service..."
+cd /home/ubuntu/medilink-hub/document-service
+pip install -r requirements.txt
+python3 -m alembic upgrade head
+nohup uvicorn main:app --host 0.0.0.0 --port 8004 > /var/log/document-service.log 2>&1 &
 
-              echo "All services started."
-              EOF
+echo "All services started."
+EOF
   )
 
   tag_specifications {
