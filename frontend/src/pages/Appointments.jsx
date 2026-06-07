@@ -137,8 +137,11 @@ export default function Appointments() {
       const dt = new Date(selectedDate)
       dt.setHours(hours, minutes, 0, 0)
 
-      const payload = { datetime: dt.toISOString() }
-      if (doctorId.trim()) payload.doctor_id = doctorId.trim()
+      const payload = { 
+        datetime: dt.toISOString(),
+        patient_id: role === 'doctor' ? doctorId.trim() : tokenData.user_id,
+        doctor_id: role === 'doctor' ? tokenData.user_id : doctorId.trim()
+      }
       await apptApi.post('/appointments', payload)
       setSuccess('Appointment created successfully!')
       setShowModal(false)
@@ -295,13 +298,14 @@ export default function Appointments() {
                       </div>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="appt-doctor">Doctor ID (optional)</label>
+                      <label htmlFor="appt-doctor">{role === 'doctor' ? 'Patient ID' : 'Doctor ID'}</label>
                       <input
                         id="appt-doctor"
                         type="text"
-                        placeholder="UUID of doctor"
+                        placeholder={`UUID of ${role === 'doctor' ? 'patient' : 'doctor'}`}
                         value={doctorId}
                         onChange={(e) => setDoctorId(e.target.value)}
+                        required
                       />
                     </div>
 

@@ -26,7 +26,7 @@ export default function Records() {
 
   const fetchRecords = async () => {
     try {
-      const res = await healthApi.get('/records')
+      const res = await healthApi.get('/health-records')
       setRecords(res.data)
     } catch (err) {
       console.error('Fetch records error:', err)
@@ -44,8 +44,8 @@ export default function Records() {
     setPatientLookupError('')
     setLoading(true)
     try {
-      await healthApi.post('/records', {
-        user_id: patientEmail,
+      await healthApi.post('/health-records', {
+        patient_id: patientEmail,
         description
       })
       setSuccess('Record created successfully!')
@@ -115,7 +115,7 @@ export default function Records() {
                 </div>
                 <div className="record-card-footer">
                   <span className="record-patient-label">Patient ID</span>
-                  <span className="record-patient-id">{r.user_id.slice(0, 8)}…</span>
+                  <span className="record-patient-id">{r.patient_id.slice(0, 8)}…</span>
                 </div>
               </div>
             ))}

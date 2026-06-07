@@ -28,15 +28,32 @@ export default function Documents() {
     setSuccess('')
     setUploading(true)
 
-    const formData = new FormData()
-    formData.append('file', file)
-
     try {
-      await documentApi.post('/documents/upload', formData)
+      // 1. Get presigned URL
+      const { data } = await documentApi.post('/documents', {
+        file_name: file.name,
+        file_type: file.type || 'application/octet-stream',
+        record_id: ''
+      })
+      const { upload_url, document_id } = data
+
+      // 2. Upload directly to S3 (bypassing backend)
+      const res = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      })
+      
+      if (!res.ok) throw new Error('Failed to upload file to S3')
+
+      // 3. Confirm upload
+      await documentApi.post(`/documents/${document_id}/confirm`)
+
       setSuccess(`"${file.name}" uploaded successfully!`)
       fetchDocuments()
     } catch (err) {
-      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || 'Upload failed'
+      console.error(err)
+      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || err.message || 'Upload failed'
       setError(typeof msg === 'string' ? msg : JSON.stringify(msg))
     } finally {
       setUploading(false)

@@ -24,7 +24,7 @@ export default function Dashboard() {
         const [userRes, apptRes, recRes, docRes] = await Promise.allSettled([
           userApi.get('/me'),
           apptApi.get('/appointments'),
-          healthApi.get('/records'),
+          healthApi.get('/health-records'),
           documentApi.get('/documents')
         ])
 
