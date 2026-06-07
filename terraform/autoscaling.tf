@@ -128,29 +128,25 @@ resource "aws_launch_template" "backend" {
               python3 -m venv venv
               source venv/bin/activate
 
-              # Start each service with its own DATABASE_URL
+              # Start each service (credentials fetched from Secrets Manager via aws_utils.py)
               echo "Starting user-service..."
               cd /home/ubuntu/medilink-hub/user-service
               pip install -r requirements.txt
-              export DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/user_db"
               nohup uvicorn main:app --host 0.0.0.0 --port 8001 > /var/log/user-service.log 2>&1 &
 
               echo "Starting appointment-service..."
               cd /home/ubuntu/medilink-hub/appointment-service
               pip install -r requirements.txt
-              export DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/appointment_db"
               nohup uvicorn main:app --host 0.0.0.0 --port 8002 > /var/log/appointment-service.log 2>&1 &
 
               echo "Starting health-service..."
               cd /home/ubuntu/medilink-hub/health-service
               pip install -r requirements.txt
-              export DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/health_db"
               nohup uvicorn main:app --host 0.0.0.0 --port 8003 > /var/log/health-service.log 2>&1 &
 
               echo "Starting document-service..."
               cd /home/ubuntu/medilink-hub/document-service
               pip install -r requirements.txt
-              export DATABASE_URL="postgresql+asyncpg://$RDS_USER:$RDS_PASS@$RDS_HOST:$RDS_PORT/document_db"
               nohup uvicorn main:app --host 0.0.0.0 --port 8004 > /var/log/document-service.log 2>&1 &
 
               echo "All services started."

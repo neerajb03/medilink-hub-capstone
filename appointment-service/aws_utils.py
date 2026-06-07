@@ -34,9 +34,11 @@ def get_database_url(db_name: str) -> str:
     if env_url:
         return env_url
 
+    from urllib.parse import quote_plus
     creds = get_secret("medilink/production/db-credentials")
+    password = quote_plus(creds['password'])
     return (
-        f"postgresql+asyncpg://{creds['username']}:{creds['password']}"
+        f"postgresql+asyncpg://{creds['username']}:{password}"
         f"@{creds['host']}:{creds['port']}/{db_name}"
     )
 
