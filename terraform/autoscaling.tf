@@ -95,6 +95,8 @@ resource "aws_launch_template" "backend" {
               which pip3 || apt-get install -y python3-pip python3-venv
               which psql || apt-get install -y postgresql-client
               which jq   || apt-get install -y jq
+              # Install AWS CLI (not pre-installed on Ubuntu AMIs)
+              which aws  || apt-get install -y awscli
 
               # Clone latest code from GitHub (Force clean clone)
               cd /home/ubuntu
@@ -102,21 +104,23 @@ resource "aws_launch_template" "backend" {
               git clone https://github.com/neerajb03/medilink-hub.git
               cd medilink-hub
 
-              # RDS connection details
-              RDS_HOST="${aws_db_instance.postgres.address}"
-              RDS_PORT="5432"
-              RDS_USER="dbadmin"
-              # Fetch DB Password dynamically using Instance Profile IAM Role
-              RDS_PASS=$(aws secretsmanager get-secret-value --region us-east-1 --secret-id ${aws_secretsmanager_secret.db_credentials.id} --query SecretString --output text | jq -r .password)
-
-              # Create individual databases if they don't exist
-              export PGPASSWORD="$RDS_PASS"
-              for db in user_db appointment_db health_db document_db; do
-                echo "Checking database: $db"
-                psql -h "$RDS_HOST" -p "$RDS_PORT" -U "$RDS_USER" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || \
-                psql -h "$RDS_HOST" -p "$RDS_PORT" -U "$RDS_USER" -d postgres -c "CREATE DATABASE $db;" || \
-                echo "Warning: Could not create $db (may already exist)"
-              done
+              # Create individual databases using Python/boto3 to avoid
+              # shell quoting issues with special characters in the RDS password
+              python3 -c "
+import subprocess, json, os, sys
+try:
+    import boto3
+except ImportError:
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'boto3'])
+    import boto3
+client = boto3.client('secretsmanager', region_name='us-east-1')
+secret = json.loads(client.get_secret_value(SecretId='${aws_secretsmanager_secret.db_credentials.id}')['SecretString'])
+os.environ['PGPASSWORD'] = secret['password']
+host = '${aws_db_instance.postgres.address}'
+for db in ['user_db', 'appointment_db', 'health_db', 'document_db']:
+    r = subprocess.run(['psql', '-h', host, '-p', '5432', '-U', secret['username'], '-d', 'postgres', '-c', f'CREATE DATABASE {db};'], capture_output=True, text=True)
+    print(f'{db}: Created' if r.returncode == 0 else f'{db}: {r.stderr.strip()}')
+"
 
               export S3_BUCKET_NAME="${aws_s3_bucket.documents.bucket}"
               export S3_ENDPOINT=""
@@ -214,7 +218,6 @@ resource "aws_autoscaling_group" "backend" {
     key                 = "Name"
     value               = "medilink-backend-server"
     propagate_at_launch = true
-  }
   }
 }
 
