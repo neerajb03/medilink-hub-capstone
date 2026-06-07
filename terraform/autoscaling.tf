@@ -181,7 +181,7 @@ resource "aws_autoscaling_group" "frontend" {
   }
 
   health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600
 
   tag {
     key                 = "Name"
@@ -212,7 +212,7 @@ resource "aws_autoscaling_group" "backend" {
   }
 
   health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 900
 
   tag {
     key                 = "Name"
