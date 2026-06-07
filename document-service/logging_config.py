@@ -2,6 +2,11 @@ import logging
 import json
 from datetime import datetime
 
+import contextvars
+from uuid import uuid4
+
+request_id_var = contextvars.ContextVar("request_id", default=None)
+
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_record = {
@@ -11,6 +16,11 @@ class JSONFormatter(logging.Formatter):
             "module": record.module,
             "funcName": record.funcName,
         }
+        
+        req_id = request_id_var.get()
+        if req_id:
+            log_record["request_id"] = req_id
+
         if hasattr(record, "extra"):
             log_record.update(record.extra)
         if record.exc_info:

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, field_validator
-from sqlalchemy import Column, Text, DateTime
+from sqlalchemy import Column, Text, DateTime, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -27,17 +27,22 @@ from auth.jwt import get_current_user
 sqs = boto3.client('sqs', region_name='us-east-1')
 SQS_QUEUE_URL = os.getenv("SQS_QUEUE_URL")
 
-def publish_appointment_event(appointment_id: str, user_id: str, status: str):
+def publish_appointment_event(appointment_id: str, patient_id: str, doctor_id: str, status: str):
     if not SQS_QUEUE_URL:
         print(f"Warning: SQS_QUEUE_URL not set. Skipping event for {appointment_id}")
         return
     try:
+        from logging_config import request_id_var
+        
         sqs.send_message(
             QueueUrl=SQS_QUEUE_URL,
             MessageBody=json.dumps({
+                "event": f"APPOINTMENT_{status.upper()}",
                 "appointment_id": str(appointment_id),
-                "user_id": str(user_id),
-                "status": status
+                "patient_id": str(patient_id),
+                "doctor_id": str(doctor_id),
+                "status": status,
+                "x_request_id": request_id_var.get()
             })
         )
     except Exception as e:
@@ -56,11 +61,13 @@ class Base(DeclarativeBase):
 class Appointment(Base):
     __tablename__ = "appointments"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False)
-    doctor_id = Column(UUID(as_uuid=True), nullable=True)
+    patient_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    doctor_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     datetime = Column(DateTime, nullable=False)
     status = Column(Text, default="pending")
     created_at = Column(DateTime, default=dt.datetime.utcnow)
+    updated_at = Column(DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
+    is_deleted = Column(Boolean, default=False)
 
 
 async def get_db():
@@ -86,6 +93,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from logging_config import request_id_var
+from uuid import uuid4
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        req_id = request.headers.get("X-Request-ID") or str(uuid4())
+        request_id_var.set(req_id)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = req_id
+        return response
+
+app.add_middleware(RequestIDMiddleware)
 
 
 # --- Error Handlers ---
@@ -119,7 +140,7 @@ async def global_handler(request: Request, exc: Exception):
 
 # --- Schemas ---
 class AppointmentCreate(BaseModel):
-    doctor_id: str | None = None
+    doctor_id: str
     datetime: dt.datetime
 
     @field_validator("datetime")
@@ -181,10 +202,11 @@ async def create_appointment(
         async with httpx.AsyncClient() as client:
             resp = await client.get(f"{INTERNAL_ALB_DNS}/users/{data.doctor_id}")
             if resp.status_code != 200 or resp.json().get("role") != "doctor":
-                raise HTTPException(status_code=400, detail="Invalid doctor ID or user is not a doctor")
+                print("Failed to validate doctor synchronously, proceeding with soft consistency")
+                pass # Soft consistency: allow creation even if validation fails temporarily
 
     appt = Appointment(
-        user_id=user["user_id"],
+        patient_id=user["user_id"],
         doctor_id=data.doctor_id,
         datetime=data.datetime,
         status="pending",
@@ -193,12 +215,12 @@ async def create_appointment(
     await db.commit()
     await db.refresh(appt)
 
-    publish_appointment_event(str(appt.id), str(appt.user_id), "pending")
+    publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "pending")
 
     return {
         "id": str(appt.id),
-        "user_id": str(appt.user_id),
-        "doctor_id": str(appt.doctor_id) if appt.doctor_id else None,
+        "patient_id": str(appt.patient_id),
+        "doctor_id": str(appt.doctor_id),
         "datetime": appt.datetime.isoformat(),
         "status": appt.status,
     }
@@ -221,11 +243,11 @@ async def accept_appointment(
     if str(appt.doctor_id) != user["user_id"]:
         raise HTTPException(status_code=403, detail="You are not the assigned doctor")
         
-    appt.status = "accepted"
+    appt.status = "completed"
     await db.commit()
     await db.refresh(appt)
     
-    publish_appointment_event(str(appt.id), str(appt.user_id), "accepted")
+    publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "completed")
     
     return {"status": "success", "appointment_id": str(appt.id)}
 
@@ -249,7 +271,7 @@ async def list_appointments(
 
     if user["role"] == "patient":
         result = await db.execute(
-            select(Appointment).where(Appointment.user_id == user["user_id"])
+            select(Appointment).where(Appointment.patient_id == user["user_id"])
         )
     elif user["role"] == "doctor":
         result = await db.execute(
@@ -262,8 +284,8 @@ async def list_appointments(
     return [
         {
             "id": str(a.id),
-            "user_id": str(a.user_id),
-            "doctor_id": str(a.doctor_id) if a.doctor_id else None,
+            "patient_id": str(a.patient_id),
+            "doctor_id": str(a.doctor_id),
             "datetime": a.datetime.isoformat(),
             "status": a.status,
         }

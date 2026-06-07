@@ -31,6 +31,10 @@ export default function Navbar() {
           <span className="nav-icon">📄</span>
           Documents
         </NavLink>
+        <NavLink to="/chatbot" className={({ isActive }) => isActive ? 'active' : ''}>
+          <span className="nav-icon">🤖</span>
+          AI Assistant
+        </NavLink>
       </nav>
       <div className="sidebar-footer">
         <button onClick={handleLogout}>
