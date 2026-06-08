@@ -199,6 +199,8 @@ async def get_presigned_url(
             appt = resp.json()
             if appt.get("doctor_id") != user["user_id"]:
                 raise HTTPException(status_code=403, detail="You can only upload documents for your own appointments")
+            if appt.get("status") != "completed":
+                raise HTTPException(status_code=400, detail="Complete appointment first")
             
             patient_id = appt.get("patient_id")
 

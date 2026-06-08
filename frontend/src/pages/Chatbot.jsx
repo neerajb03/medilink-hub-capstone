@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { healthApi } from '../api/axios';
 import Navbar from '../components/Navbar';
 import '../Chatbot.css'; // We'll create this
@@ -10,6 +11,8 @@ export default function Chatbot() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const [searchParams] = useSearchParams();
+  const appointmentId = searchParams.get('appointment_id');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,7 +32,10 @@ export default function Chatbot() {
     setLoading(true);
 
     try {
-      const { data } = await healthApi.post('/chat', { message: userMsg.text });
+      const { data } = await healthApi.post('/chat', { 
+        message: userMsg.text,
+        appointment_id: appointmentId || undefined
+      });
       setMessages((prev) => [
         ...prev,
         { text: data.reply, sender: 'bot', isFallback: data.is_fallback }

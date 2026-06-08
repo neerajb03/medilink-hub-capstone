@@ -242,6 +242,7 @@ async def list_records(
 
 class ChatRequest(BaseModel):
     message: str
+    appointment_id: str | None = None
 
 import httpx
 from aws_utils import get_secret
@@ -321,12 +322,38 @@ async def chat_endpoint(data: ChatRequest, user=Depends(get_current_user), db: A
     if user["role"] not in ["patient", "doctor"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
+    context_msg = data.message
+    if data.appointment_id:
+        # Fetch appointment details
+        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", timeout=5.0)
+            if resp.status_code == 200:
+                appt = resp.json()
+                # Ensure doctor owns the appointment (or patient)
+                if user["role"] == "admin" or appt.get("doctor_id") == user["user_id"] or appt.get("patient_id") == user["user_id"]:
+                    patient_id = appt.get("patient_id")
+                    
+                    # Fetch patient history from DB
+                    from sqlalchemy import select
+                    records = await db.execute(select(HealthRecord).where(HealthRecord.patient_id == patient_id))
+                    history = records.scalars().all()
+                    
+                    context_prefix = "Patient Medical Context:\n"
+                    if history:
+                        for idx, r in enumerate(history[-5:]): # Last 5 records
+                            context_prefix += f"- Record {idx+1}: {r.diagnosis or 'No diagnosis'}. {r.description}\n"
+                    else:
+                        context_prefix += "No prior medical records found.\n"
+                    
+                    context_msg = f"{context_prefix}\nDoctor Query: {data.message}"
+
     # Skip HF if it's marked down
     if time.time() < hf_down_until:
-        return await use_groq_or_fallback(data.message)
+        return await use_groq_or_fallback(context_msg)
 
     try:
-        response = await call_huggingface(data.message, timeout=10.0)
+        response = await call_huggingface(context_msg, timeout=10.0)
         logger.info("HF success")
         return {
             "reply": response,
@@ -337,4 +364,4 @@ async def chat_endpoint(data: ChatRequest, user=Depends(get_current_user), db: A
         # Circuit breaker trigger
         hf_down_until = time.time() + 60
         logger.warning("HF timeout/failure", extra={"error": str(e)})
-        return await use_groq_or_fallback(data.message)
+        return await use_groq_or_fallback(context_msg)

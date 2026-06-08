@@ -301,12 +301,15 @@ export default function Appointments() {
                       </button>
                     )}
                     {role === 'doctor' && a.status === 'completed' && (
-                      <div style={{display: 'flex', gap: '8px'}}>
+                      <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
                         <button className="btn btn-primary btn-sm" onClick={() => navigate(`/records?appointment_id=${a.id}&patient_id=${a.patient_id}`)}>
                           Add Health Record
                         </button>
                         <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/documents?appointment_id=${a.id}`)}>
                           Documents
+                        </button>
+                        <button className="btn btn-secondary btn-sm" style={{backgroundColor: '#6366f1'}} onClick={() => navigate(`/chat?appointment_id=${a.id}`)}>
+                          AI Assistant
                         </button>
                       </div>
                     )}
