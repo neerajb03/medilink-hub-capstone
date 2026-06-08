@@ -141,19 +141,16 @@ nohup uvicorn main:app --host 0.0.0.0 --port 8001 > /var/log/user-service.log 2>
 echo "Starting appointment-service..."
 cd /home/ubuntu/medilink-hub/appointment-service
 pip install -r requirements.txt
-python3 -m alembic upgrade head
 nohup uvicorn main:app --host 0.0.0.0 --port 8002 > /var/log/appointment-service.log 2>&1 &
 
 echo "Starting health-service..."
 cd /home/ubuntu/medilink-hub/health-service
 pip install -r requirements.txt
-python3 -m alembic upgrade head
 nohup uvicorn main:app --host 0.0.0.0 --port 8003 > /var/log/health-service.log 2>&1 &
 
 echo "Starting document-service..."
 cd /home/ubuntu/medilink-hub/document-service
 pip install -r requirements.txt
-python3 -m alembic upgrade head
 nohup uvicorn main:app --host 0.0.0.0 --port 8004 > /var/log/document-service.log 2>&1 &
 
 echo "All services started."
