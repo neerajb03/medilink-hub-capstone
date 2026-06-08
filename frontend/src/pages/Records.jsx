@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { healthApi, userApi } from '../api/axios'
 
@@ -24,6 +25,18 @@ export default function Records() {
   const role = tokenData?.role || ''
   const isDoctor = role === 'doctor'
 
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  
+  useEffect(() => {
+    const aptId = searchParams.get('appointment_id')
+    const patId = searchParams.get('patient_id')
+    if (aptId && patId) {
+      setPatientEmail(patId) // Assuming patId is the UUID, the form uses patientEmail state for patient_id right now
+      setShowModal(true)
+    }
+  }, [searchParams])
+
   const fetchRecords = async () => {
     try {
       const res = await healthApi.get('/health-records')
@@ -44,15 +57,26 @@ export default function Records() {
     setPatientLookupError('')
     setLoading(true)
     try {
-      await healthApi.post('/health-records', {
+      const payload = {
         patient_id: patientEmail,
         description
-      })
+      }
+      const aptId = searchParams.get('appointment_id')
+      if (aptId) {
+        payload.appointment_id = aptId
+      }
+      
+      await healthApi.post('/health-records', payload)
       setSuccess('Record created successfully!')
       setShowModal(false)
       setPatientEmail('')
       setDescription('')
       fetchRecords()
+      
+      if (searchParams.get('appointment_id')) {
+        // Clear search params after success
+        navigate('/records', { replace: true })
+      }
     } catch (err) {
       const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || 'Failed to create record'
       setError(typeof msg === 'string' ? msg : JSON.stringify(msg))
@@ -136,9 +160,10 @@ export default function Records() {
                   <input
                     id="rec-patient"
                     type="text"
-                    placeholder="Enter patient UUID"
+                    placeholder="Enter patient ID..."
                     value={patientEmail}
                     onChange={(e) => setPatientEmail(e.target.value)}
+                    disabled={!!searchParams.get('appointment_id')}
                     required
                   />
                   {patientLookupError && (

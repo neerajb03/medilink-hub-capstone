@@ -243,12 +243,59 @@ async def accept_appointment(
     if str(appt.doctor_id) != user["user_id"]:
         raise HTTPException(status_code=403, detail="You are not the assigned doctor")
         
+    appt.status = "accepted"
+    await db.commit()
+    await db.refresh(appt)
+    
+    publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "accepted")
+    return {"status": "success", "appointment_id": str(appt.id)}
+
+@app.put("/appointments/{appt_id}/deny")
+async def deny_appointment(
+    appt_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if user["role"] != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctors can deny appointments")
+        
+    result = await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    if str(appt.doctor_id) != user["user_id"]:
+        raise HTTPException(status_code=403, detail="You are not the assigned doctor")
+        
+    appt.status = "denied"
+    await db.commit()
+    await db.refresh(appt)
+    
+    publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "denied")
+    return {"status": "success", "appointment_id": str(appt.id)}
+
+@app.put("/appointments/{appt_id}/complete")
+async def complete_appointment(
+    appt_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if user["role"] != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctors can complete appointments")
+        
+    result = await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    if str(appt.doctor_id) != user["user_id"]:
+        raise HTTPException(status_code=403, detail="You are not the assigned doctor")
+        
     appt.status = "completed"
     await db.commit()
     await db.refresh(appt)
     
     publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "completed")
-    
     return {"status": "success", "appointment_id": str(appt.id)}
 
 

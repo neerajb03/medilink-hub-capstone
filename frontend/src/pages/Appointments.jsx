@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { apptApi, userApi } from '../api/axios'
 
@@ -109,6 +110,7 @@ export default function Appointments() {
 
   const tokenData = parseToken()
   const role = tokenData?.role || ''
+  const navigate = useNavigate()
 
   const fetchAppointments = async () => {
     try {
@@ -169,19 +171,31 @@ export default function Appointments() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this appointment?')) return
+    if (!confirm('Cancel this appointment?')) return
     try {
       await apptApi.delete(`/appointments/${id}`)
       fetchAppointments()
     } catch (err) {
-      const msg = err.response?.data?.detail?.error?.message || 'Failed to delete'
+      const msg = err.response?.data?.detail?.error?.message || 'Failed to cancel'
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    }
+  }
+
+  const handleUpdateStatus = async (id, action) => {
+    try {
+      await apptApi.put(`/appointments/${id}/${action}`)
+      fetchAppointments()
+    } catch (err) {
+      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || `Failed to ${action} appointment`
       setError(typeof msg === 'string' ? msg : JSON.stringify(msg))
     }
   }
 
   const getStatusClass = (status) => {
     switch (status) {
-      case 'confirmed': return 'badge-confirmed'
+      case 'accepted': return 'badge-confirmed'
+      case 'completed': return 'badge-confirmed'
+      case 'denied': return 'badge-cancelled'
       case 'cancelled': return 'badge-cancelled'
       default: return 'badge-pending'
     }
@@ -189,7 +203,9 @@ export default function Appointments() {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'confirmed': return '✅'
+      case 'accepted': return '✅'
+      case 'completed': return '✅'
+      case 'denied': return '❌'
       case 'cancelled': return '❌'
       default: return '⏳'
     }
@@ -269,9 +285,31 @@ export default function Appointments() {
                     )}
                   </div>
                   <div className="appt-card-actions">
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}>
-                      Delete
-                    </button>
+                    {role === 'doctor' && a.status === 'pending' && (
+                      <>
+                        <button className="btn btn-primary btn-sm" onClick={() => handleUpdateStatus(a.id, 'accept')}>
+                          Accept
+                        </button>
+                        <button className="btn btn-danger btn-sm" style={{marginLeft: '8px'}} onClick={() => handleUpdateStatus(a.id, 'deny')}>
+                          Deny
+                        </button>
+                      </>
+                    )}
+                    {role === 'doctor' && a.status === 'accepted' && (
+                      <button className="btn btn-primary btn-sm" onClick={() => handleUpdateStatus(a.id, 'complete')}>
+                        Complete
+                      </button>
+                    )}
+                    {role === 'doctor' && a.status === 'completed' && (
+                      <button className="btn btn-primary btn-sm" onClick={() => navigate(`/records?appointment_id=${a.id}&patient_id=${a.patient_id}`)}>
+                        Add Health Record
+                      </button>
+                    )}
+                    {(role === 'patient' && a.status === 'pending') && (
+                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}>
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 </div>
               )

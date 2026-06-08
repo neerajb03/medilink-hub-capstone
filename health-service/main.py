@@ -164,10 +164,11 @@ async def create_record(
                 appt = resp.json()
                 if appt.get("status") != "completed":
                     raise HTTPException(status_code=400, detail="Health record can only be created for a completed appointment")
+                if appt.get("doctor_id") != user["user_id"]:
+                    raise HTTPException(status_code=403, detail="You can only create health records for your own appointments")
             else:
-                # Soft consistency: if service is down, log warning but proceed, or reject?
-                # User specifically asked for strict workflow enforcement: "reject if not completed"
-                print("Warning: Failed to validate appointment status, but proceeding due to soft consistency design")
+                # Strict enforcement as per user rules
+                raise HTTPException(status_code=400, detail="Failed to validate appointment or appointment not found")
 
     record = Record(
         patient_id=data.patient_id,
