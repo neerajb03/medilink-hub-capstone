@@ -158,13 +158,13 @@ async def health():
 
 @app.post("/register", status_code=201)
 async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    if data.role != "patient":
+    if data.role not in ("patient", "doctor"):
         raise HTTPException(
             status_code=403,
             detail={
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "Only patients can self-register. Doctors must be added by administrators."
+                    "message": "Invalid role. Must be 'patient' or 'doctor'."
                 }
             }
         )
