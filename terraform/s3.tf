@@ -79,7 +79,9 @@ resource "aws_iam_role_policy" "backend_consolidated" {
         ]
         Resource = [
           aws_secretsmanager_secret.db_credentials.arn,
-          aws_secretsmanager_secret.jwt_secret.arn
+          aws_secretsmanager_secret.jwt_secret.arn,
+          aws_secretsmanager_secret.hf_api_key.arn,
+          aws_secretsmanager_secret.groq_api_key.arn
         ]
       },
       # KMS Encrypt + Decrypt

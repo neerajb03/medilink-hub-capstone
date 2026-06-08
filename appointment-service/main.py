@@ -315,7 +315,7 @@ async def update_appointment(
             },
         )
 
-    if user["role"] != "patient" or str(appt.user_id) != user["user_id"]:
+    if user["role"] != "patient" or str(appt.patient_id) != user["user_id"]:
         raise HTTPException(
             status_code=403,
             detail={
@@ -351,8 +351,7 @@ async def update_appointment(
     await db.refresh(appt)
 
     return {
-        "id": str(appt.id),
-        "user_id": str(appt.user_id),
+        "patient_id": str(appt.patient_id),
         "doctor_id": str(appt.doctor_id) if appt.doctor_id else None,
         "datetime": appt.datetime.isoformat(),
         "status": appt.status,
@@ -380,7 +379,7 @@ async def delete_appointment(
             },
         )
 
-    if user["role"] != "patient" or str(appt.user_id) != user["user_id"]:
+    if user["role"] != "patient" or str(appt.patient_id) != user["user_id"]:
         raise HTTPException(
             status_code=403,
             detail={
