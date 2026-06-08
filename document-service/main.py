@@ -211,7 +211,7 @@ async def get_presigned_url(
     doc = Document(
         id=doc_id,
         patient_id=patient_id,
-        record_id=data.record_id,
+        record_id=data.record_id if data.record_id else None,
         file_name=data.file_name,
         s3_key=object_name,
         uploaded_by=user["role"],

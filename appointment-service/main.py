@@ -197,13 +197,13 @@ async def create_appointment(
     if data.doctor_id:
         # Cross-service validation: ensure the assigned doctor exists and is actually a doctor
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
-        # In a real microservice environment, you'd use service discovery or the internal ALB
-        # We assume the ALB routes /users to user-service
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{INTERNAL_ALB_DNS}/users/{data.doctor_id}")
-            if resp.status_code != 200 or resp.json().get("role") != "doctor":
-                print("Failed to validate doctor synchronously, proceeding with soft consistency")
-                pass # Soft consistency: allow creation even if validation fails temporarily
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{INTERNAL_ALB_DNS}/users/{data.doctor_id}")
+                if resp.status_code != 200 or resp.json().get("role") != "doctor":
+                    print("Failed to validate doctor synchronously, proceeding with soft consistency")
+        except Exception as e:
+            print(f"Doctor validation skipped (service unavailable): {e}")
 
     appt = Appointment(
         patient_id=user["user_id"],

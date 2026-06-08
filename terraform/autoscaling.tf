@@ -126,6 +126,7 @@ export S3_BUCKET_NAME="${aws_s3_bucket.documents.bucket}"
 export S3_ENDPOINT=""
 export AWS_DEFAULT_REGION="us-east-1"
 export SQS_QUEUE_URL="${aws_sqs_queue.appointment_events.url}"
+export INTERNAL_ALB_DNS="http://${aws_lb.internal.dns_name}"
 
 # Setup Python Virtual Environment
 cd /home/ubuntu/medilink-hub
