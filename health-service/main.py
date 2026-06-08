@@ -247,7 +247,7 @@ from aws_utils import get_secret
 
 hf_down_until = 0
 
-async def call_huggingface(message: str, timeout: float = 3.0) -> str:
+async def call_huggingface(message: str, timeout: float = 10.0) -> str:
     hf_token = get_secret("medilink/production/hf-api-key")
     if not hf_token or hf_token == "REPLACE_ME_MANUALLY_IN_CONSOLE":
         raise Exception("AI service not configured")
@@ -265,7 +265,7 @@ async def call_huggingface(message: str, timeout: float = 3.0) -> str:
         result = resp.json()
         return result[0].get("generated_text", "Sorry, I could not process your symptoms.").replace(payload["inputs"], "").strip()
 
-async def call_groq(message: str, timeout: float = 2.0) -> str:
+async def call_groq(message: str, timeout: float = 5.0) -> str:
     groq_token = get_secret("medilink/production/groq-api-key")
     if not groq_token or groq_token == "REPLACE_ME_MANUALLY_IN_CONSOLE":
         raise Exception("Groq not configured")
@@ -275,7 +275,7 @@ async def call_groq(message: str, timeout: float = 2.0) -> str:
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "llama3-8b-8192",
+        "model": "llama-3.1-8b-instant",
         "messages": [{"role": "user", "content": f"Patient symptoms: {message}. What could this be? Keep it brief and suggest consulting a doctor."}],
         "max_tokens": 100
     }
