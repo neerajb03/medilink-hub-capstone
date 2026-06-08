@@ -289,7 +289,7 @@ async def call_groq(message: str, timeout: float = 5.0) -> str:
 
 async def use_groq_or_fallback(message: str):
     try:
-        response = await call_groq(message, timeout=2.0)
+        response = await call_groq(message, timeout=5.0)
         logger.info("Groq success")
         return {
             "reply": response,
@@ -318,15 +318,15 @@ async def use_groq_or_fallback(message: str):
 async def chat_endpoint(data: ChatRequest, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     global hf_down_until
 
-    if user["role"] != "patient":
-        raise HTTPException(status_code=403, detail="Only patients can use the symptom checker")
+    if user["role"] not in ["patient", "doctor"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
 
     # Skip HF if it's marked down
     if time.time() < hf_down_until:
         return await use_groq_or_fallback(data.message)
 
     try:
-        response = await call_huggingface(data.message, timeout=3.0)
+        response = await call_huggingface(data.message, timeout=10.0)
         logger.info("HF success")
         return {
             "reply": response,

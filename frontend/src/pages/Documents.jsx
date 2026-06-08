@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { documentApi } from '../api/axios'
 
@@ -8,10 +9,13 @@ export default function Documents() {
   const [success, setSuccess] = useState('')
   const [uploading, setUploading] = useState(false)
   const [dragover, setDragover] = useState(false)
+  const [searchParams] = useSearchParams()
+  const appointmentId = searchParams.get('appointment_id')
 
   const fetchDocuments = async () => {
     try {
-      const res = await documentApi.get('/documents')
+      const url = appointmentId ? `/documents?appointment_id=${appointmentId}` : '/documents'
+      const res = await documentApi.get(url)
       setDocuments(res.data)
     } catch (err) {
       console.error('Fetch documents error:', err)
@@ -33,7 +37,7 @@ export default function Documents() {
       const { data } = await documentApi.post('/documents/presigned-url', {
         file_name: file.name,
         file_type: file.type || 'application/octet-stream',
-        record_id: ''
+        appointment_id: appointmentId || undefined
       })
       const { upload_url, document_id } = data
 

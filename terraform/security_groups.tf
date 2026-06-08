@@ -94,7 +94,7 @@ resource "aws_security_group" "internal_alb" {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.frontend_asg.id]
+    security_groups = [aws_security_group.frontend_asg.id, aws_security_group.backend_asg.id]
   }
 
   egress {

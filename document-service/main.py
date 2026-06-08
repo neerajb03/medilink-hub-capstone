@@ -162,7 +162,7 @@ async def global_handler(request: Request, exc: Exception):
 class PresignedUrlRequest(BaseModel):
     file_name: str
     file_type: str
-    record_id: str | None = None
+    appointment_id: str | None = None
 
 # --- Routes ---
 @app.get("/health")
@@ -176,8 +176,6 @@ async def get_presigned_url(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Both patients and doctors can upload
-    
     # Validate file type
     allowed = ["application/pdf", "image/jpeg", "image/png"]
     if data.file_type not in allowed:
@@ -186,15 +184,26 @@ async def get_presigned_url(
     doc_id = uuid4()
     patient_id = user["user_id"] # By default, assuming patient uploads for themselves
     
-    # If doctor is uploading, the client must send patient_id in data (but for simplicity here, we assume it's linked to a record_id or the doctor is uploading for a specific patient)
-    # Since the prompt said "S3 Naming Strategy: {patient_id}/{record_id}/{uuid}.{ext}"
     if user["role"] == "doctor":
-        # we would require patient_id, but let's assume it's passed or derived from record_id
-        # For simplicity in this iteration, we use user_id as patient_id if not provided
-        pass
-        
+        if not data.appointment_id:
+            raise HTTPException(status_code=400, detail="appointment_id is required for doctors to upload documents")
+            
+        # Verify appointment belongs to doctor
+        import httpx
+        import os
+        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", timeout=10.0)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to validate appointment or appointment not found")
+            appt = resp.json()
+            if appt.get("doctor_id") != user["user_id"]:
+                raise HTTPException(status_code=403, detail="You can only upload documents for your own appointments")
+            
+            patient_id = appt.get("patient_id")
+
     ext = data.file_name.split(".")[-1] if "." in data.file_name else "bin"
-    rec_part = data.record_id if data.record_id else "no-record"
+    rec_part = data.appointment_id if data.appointment_id else "no-record"
     object_name = f"{patient_id}/{rec_part}/{doc_id}.{ext}"
     bucket = os.getenv("S3_BUCKET_NAME", "medilink-docs")
 
@@ -211,7 +220,7 @@ async def get_presigned_url(
     doc = Document(
         id=doc_id,
         patient_id=patient_id,
-        record_id=data.record_id if data.record_id else None,
+        record_id=data.appointment_id if data.appointment_id else None,
         file_name=data.file_name,
         s3_key=object_name,
         uploaded_by=user["role"],
@@ -247,7 +256,7 @@ async def confirm_upload(
 
 @app.get("/documents")
 async def list_documents(
-    patient_id: str | None = None,
+    appointment_id: str | None = None,
     limit: int = 10,
     offset: int = 0,
     user=Depends(get_current_user),
@@ -261,13 +270,21 @@ async def list_documents(
     if user["role"] == "patient":
         query = query.where(Document.patient_id == user["user_id"])
     elif user["role"] == "doctor":
-        if not patient_id:
-            # Strictly speaking, doctors should only see their patients' docs, but we need a join or relationship mapping
-            # For simplicity, if patient_id is not given, we don't return all documents globally.
+        if not appointment_id:
             return []
-        else:
-            # We would verify if the doctor has an appointment with patient_id.
-            query = query.where(Document.patient_id == patient_id)
+        
+        import httpx
+        import os
+        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{appointment_id}", timeout=10.0)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=400, detail="Invalid appointment")
+            appt = resp.json()
+            if appt.get("doctor_id") != user["user_id"]:
+                raise HTTPException(status_code=403, detail="Unauthorized for this appointment")
+                
+        query = query.where(Document.record_id == appointment_id)
 
     result = await db.execute(query)
     documents = result.scalars().all()

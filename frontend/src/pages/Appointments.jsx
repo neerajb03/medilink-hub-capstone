@@ -301,9 +301,14 @@ export default function Appointments() {
                       </button>
                     )}
                     {role === 'doctor' && a.status === 'completed' && (
-                      <button className="btn btn-primary btn-sm" onClick={() => navigate(`/records?appointment_id=${a.id}&patient_id=${a.patient_id}`)}>
-                        Add Health Record
-                      </button>
+                      <div style={{display: 'flex', gap: '8px'}}>
+                        <button className="btn btn-primary btn-sm" onClick={() => navigate(`/records?appointment_id=${a.id}&patient_id=${a.patient_id}`)}>
+                          Add Health Record
+                        </button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/documents?appointment_id=${a.id}`)}>
+                          Documents
+                        </button>
+                      </div>
                     )}
                     {(role === 'patient' && a.status === 'pending') && (
                       <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}>
