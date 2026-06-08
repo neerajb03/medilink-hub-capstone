@@ -1,8 +1,9 @@
 # --- Secrets Manager for DB Credentials ---
 resource "aws_secretsmanager_secret" "db_credentials" {
   name        = "medilink/production/db-credentials"
-  description = "PostgreSQL credentials for MediLink Hub"
-  kms_key_id  = aws_kms_key.medilink.arn
+  description             = "PostgreSQL credentials for MediLink Hub"
+  kms_key_id              = aws_kms_key.medilink.arn
+  recovery_window_in_days = 0
 
   tags = { Name = "medilink-db-secret" }
 }
@@ -24,9 +25,10 @@ resource "random_password" "jwt_secret" {
 }
 
 resource "aws_secretsmanager_secret" "jwt_secret" {
-  name        = "medilink/production/jwt-secret"
-  description = "JWT signing secret for authentication"
-  kms_key_id  = aws_kms_key.medilink.arn
+  name                    = "medilink/production/jwt-secret"
+  description             = "JWT signing secret for authentication"
+  kms_key_id              = aws_kms_key.medilink.arn
+  recovery_window_in_days = 0
 
   tags = { Name = "medilink-jwt-secret" }
 }
@@ -41,14 +43,35 @@ resource "aws_secretsmanager_secret_version" "jwt_secret" {
 # this just creates the secret placeholder.
 resource "aws_secretsmanager_secret" "hf_api_key" {
   name        = "medilink/production/hf-api-key"
-  description = "Hugging Face Inference API Token"
-  kms_key_id  = aws_kms_key.medilink.arn
+  description             = "Hugging Face Inference API Token"
+  kms_key_id              = aws_kms_key.medilink.arn
+  recovery_window_in_days = 0
 
   tags = { Name = "medilink-hf-secret" }
 }
 
 resource "aws_secretsmanager_secret_version" "hf_api_key" {
   secret_id     = aws_secretsmanager_secret.hf_api_key.id
+  secret_string = "REPLACE_ME_MANUALLY_IN_CONSOLE"
+  
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+# --- Secrets Manager for Groq API Key ---
+# Note: The actual API key should be injected manually or via CI/CD
+resource "aws_secretsmanager_secret" "groq_api_key" {
+  name                    = "medilink/production/groq-api-key"
+  description             = "Groq API Token for Fallback LLM"
+  kms_key_id              = aws_kms_key.medilink.arn
+  recovery_window_in_days = 0
+
+  tags = { Name = "medilink-groq-secret" }
+}
+
+resource "aws_secretsmanager_secret_version" "groq_api_key" {
+  secret_id     = aws_secretsmanager_secret.groq_api_key.id
   secret_string = "REPLACE_ME_MANUALLY_IN_CONSOLE"
   
   lifecycle {
