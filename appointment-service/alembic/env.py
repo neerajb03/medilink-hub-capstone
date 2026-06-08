@@ -58,24 +58,14 @@ def run_migrations_online() -> None:
 
     """
     from aws_utils import get_database_url
-    # Make sure to import models here for autogenerate
-    # from main import Base
-    # target_metadata = Base.metadata
+    from sqlalchemy import create_engine
 
     url = get_database_url("appointment_db")
-    
-    # We have to swap asyncpg for psycopg2 since Alembic usually runs synchronously
-    # Or we can run it asynchronously. Since we use `engine_from_config` default, it's sync.
-    # Actually, aws_utils returns postgresql+asyncpg://...
     sync_url = url.replace("postgresql+asyncpg://", "postgresql://")
-    
-    config.set_main_option("sqlalchemy.url", sync_url)
 
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    # Use create_engine directly instead of config.set_main_option + engine_from_config
+    # because configparser interprets % chars in the URL-encoded password as interpolation tokens
+    connectable = create_engine(sync_url, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         context.configure(

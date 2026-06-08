@@ -257,3 +257,21 @@ async def get_user_by_id(
         "name": user.name,
         "role": user.role,
     }
+
+
+@app.get("/doctors")
+async def list_doctors(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all doctors — used by patients to select a doctor for appointments."""
+    result = await db.execute(select(User).where(User.role == "doctor"))
+    doctors = result.scalars().all()
+    return [
+        {
+            "id": str(d.id),
+            "name": d.name,
+            "email": d.email,
+        }
+        for d in doctors
+    ]

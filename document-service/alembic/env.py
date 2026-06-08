@@ -58,16 +58,12 @@ def run_migrations_online() -> None:
 
     """
     from aws_utils import get_database_url
+    from sqlalchemy import create_engine
 
     url = get_database_url("document_db")
     sync_url = url.replace("postgresql+asyncpg://", "postgresql://")
-    config.set_main_option("sqlalchemy.url", sync_url)
 
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_engine(sync_url, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         context.configure(

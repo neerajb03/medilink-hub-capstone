@@ -233,7 +233,7 @@ resource "aws_lb_listener_rule" "users" {
 
   condition {
     path_pattern {
-      values = ["/api/users/*", "/users/*", "/login", "/register", "/me"]
+      values = ["/users/*", "/login", "/register", "/me", "/doctors"]
     }
   }
 }

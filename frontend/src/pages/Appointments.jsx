@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Navbar from '../components/Navbar'
-import { apptApi } from '../api/axios'
+import { apptApi, userApi } from '../api/axios'
 
 function parseToken() {
   try {
@@ -102,6 +102,7 @@ export default function Appointments() {
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState('09:00')
   const [doctorId, setDoctorId] = useState('')
+  const [doctors, setDoctors] = useState([])
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
@@ -118,8 +119,18 @@ export default function Appointments() {
     }
   }
 
+  const fetchDoctors = async () => {
+    try {
+      const res = await userApi.get('/doctors')
+      setDoctors(res.data)
+    } catch (err) {
+      console.error('Fetch doctors error:', err)
+    }
+  }
+
   useEffect(() => {
     fetchAppointments()
+    if (role === 'patient') fetchDoctors()
   }, [])
 
   const handleCreate = async (e) => {
@@ -253,7 +264,7 @@ export default function Appointments() {
                     </div>
                     {a.doctor_id && (
                       <div className="appt-doctor">
-                        <span className="appt-label">Doctor:</span> {a.doctor_id.slice(0, 8)}…
+                        <span className="appt-label">Doctor:</span> {doctors.find(d => d.id === a.doctor_id)?.name || a.doctor_id.slice(0, 8) + '…'}
                       </div>
                     )}
                   </div>
@@ -298,15 +309,34 @@ export default function Appointments() {
                       </div>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="appt-doctor">{role === 'doctor' ? 'Patient ID' : 'Doctor ID'}</label>
-                      <input
-                        id="appt-doctor"
-                        type="text"
-                        placeholder={`UUID of ${role === 'doctor' ? 'patient' : 'doctor'}`}
-                        value={doctorId}
-                        onChange={(e) => setDoctorId(e.target.value)}
-                        required
-                      />
+                      {role === 'patient' ? (
+                        <>
+                          <label htmlFor="appt-doctor">Select Doctor</label>
+                          <select
+                            id="appt-doctor"
+                            value={doctorId}
+                            onChange={(e) => setDoctorId(e.target.value)}
+                            required
+                          >
+                            <option value="">— Choose a doctor —</option>
+                            {doctors.map(d => (
+                              <option key={d.id} value={d.id}>Dr. {d.name}</option>
+                            ))}
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <label htmlFor="appt-doctor">Patient ID</label>
+                          <input
+                            id="appt-doctor"
+                            type="text"
+                            placeholder="UUID of patient"
+                            value={doctorId}
+                            onChange={(e) => setDoctorId(e.target.value)}
+                            required
+                          />
+                        </>
+                      )}
                     </div>
 
                     {selectedDate && (
