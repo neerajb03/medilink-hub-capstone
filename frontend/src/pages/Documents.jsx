@@ -30,7 +30,7 @@ export default function Documents() {
 
     try {
       // 1. Get presigned URL
-      const { data } = await documentApi.post('/documents', {
+      const { data } = await documentApi.post('/documents/presigned-url', {
         file_name: file.name,
         file_type: file.type || 'application/octet-stream',
         record_id: ''
