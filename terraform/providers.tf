@@ -7,11 +7,11 @@ terraform {
     }
   }
   backend "s3" {
-    bucket         = "medilink-tf-state-371454942267"
-    key            = "medilink/dev/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "medilink-tf-locks"
-    encrypt        = true
+    bucket       = "medilink-tf-state-371454942267"
+    key          = "medilink/dev/terraform.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true
+    encrypt      = true
   }
 }
 
