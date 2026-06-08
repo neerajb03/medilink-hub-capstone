@@ -6,6 +6,13 @@ terraform {
       version = "~> 5.0"
     }
   }
+  backend "s3" {
+    bucket         = "medilink-tf-state-371454942267"
+    key            = "medilink/dev/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "medilink-tf-locks"
+    encrypt        = true
+  }
 }
 
 provider "aws" {

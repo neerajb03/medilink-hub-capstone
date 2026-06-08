@@ -1,15 +1,26 @@
-import React, { useState } from 'react';
-import { Box, Typography, TextField, Button, Paper, List, ListItem, ListItemText, CircularProgress } from '@mui/material';
-import SendIcon from '@mui/icons-material/Send';
+import React, { useState, useRef, useEffect } from 'react';
+import { healthApi } from '../api/axios';
+import Navbar from '../components/Navbar';
+import '../Chatbot.css'; // We'll create this
 
 export default function Chatbot() {
   const [messages, setMessages] = useState([
-    { text: "Hello! I am your MediLink AI assistant. How can I help you today?", sender: 'bot' }
+    { text: "Hello! I am your MediLink AI assistant. How can I help you today?", sender: 'bot', isFallback: false }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef(null);
 
-  const handleSend = () => {
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading]);
+
+  const handleSend = async (e) => {
+    if (e) e.preventDefault();
     if (!input.trim()) return;
 
     const userMsg = { text: input, sender: 'user' };
@@ -17,73 +28,74 @@ export default function Chatbot() {
     setInput('');
     setLoading(true);
 
-    // Mock AI response
-    setTimeout(() => {
+    try {
+      const { data } = await healthApi.post('/chat', { message: userMsg.text });
       setMessages((prev) => [
         ...prev,
-        { text: "I'm still learning, but I can help you find doctors and manage your appointments soon!", sender: 'bot' }
+        { text: data.reply, sender: 'bot', isFallback: data.is_fallback }
       ]);
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        { 
+          text: "I'm having trouble connecting right now. Please try again later.", 
+          sender: 'bot', 
+          isFallback: true 
+        }
+      ]);
+    } finally {
       setLoading(false);
-    }, 1500);
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleSend();
     }
   };
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 2 }}>
-      <Typography variant="h4" gutterBottom align="center" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-        MediLink AI Assistant
-      </Typography>
-      <Paper elevation={3} sx={{ height: '60vh', display: 'flex', flexDirection: 'column', p: 2, borderRadius: 3 }}>
-        <Box sx={{ flexGrow: 1, overflowY: 'auto', mb: 2 }}>
-          <List>
+    <div className="app-layout">
+      <Navbar />
+      <main className="main-content">
+        <div className="chatbot-container">
+          <div className="chatbot-header">
+            <h2>MediLink AI Assistant</h2>
+            <p>Describe your symptoms or ask a health question</p>
+          </div>
+          
+          <div className="chatbot-messages">
             {messages.map((msg, index) => (
-              <ListItem key={index} sx={{ display: 'flex', justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
-                <Paper 
-                  elevation={1} 
-                  sx={{ 
-                    p: 2, 
-                    maxWidth: '70%',
-                    backgroundColor: msg.sender === 'user' ? 'primary.main' : 'grey.100',
-                    color: msg.sender === 'user' ? 'white' : 'text.primary',
-                    borderRadius: 2
-                  }}
-                >
-                  <ListItemText primary={msg.text} />
-                </Paper>
-              </ListItem>
+              <div key={index} className={`message-wrapper ${msg.sender}`}>
+                <div className="message-bubble">
+                  {msg.text}
+                </div>
+                {msg.isFallback && (
+                  <div className="fallback-warning">
+                    ⚠️ Service is slow right now. Showing fallback response.
+                  </div>
+                )}
+              </div>
             ))}
             {loading && (
-              <ListItem sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <CircularProgress size={24} />
-              </ListItem>
+              <div className="message-wrapper bot">
+                <div className="message-bubble typing-indicator">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
             )}
-          </List>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="Type your message..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-          />
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={handleSend}
-            disabled={!input.trim() || loading}
-            sx={{ px: 4 }}
-          >
-            <SendIcon />
-          </Button>
-        </Box>
-      </Paper>
-    </Box>
+            <div ref={messagesEndRef} />
+          </div>
+
+          <form className="chatbot-input-form" onSubmit={handleSend}>
+            <input
+              type="text"
+              placeholder="Type your message..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={loading}
+            />
+            <button type="submit" disabled={!input.trim() || loading} className="btn btn-primary">
+              Send
+            </button>
+          </form>
+        </div>
+      </main>
+    </div>
   );
 }

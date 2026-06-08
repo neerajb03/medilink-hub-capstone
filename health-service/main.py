@@ -3,6 +3,7 @@ from uuid import uuid4
 from datetime import datetime
 from contextlib import asynccontextmanager
 
+import time
 from fastapi import FastAPI, HTTPException, Depends, Request
 from logging_config import setup_logger
 
@@ -244,38 +245,95 @@ class ChatRequest(BaseModel):
 import httpx
 from aws_utils import get_secret
 
-@app.post("/chat")
-async def chat_with_ai(
-    data: ChatRequest,
-    user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    if user["role"] != "patient":
-        raise HTTPException(status_code=403, detail="Only patients can use the symptom checker")
+hf_down_until = 0
 
+async def call_huggingface(message: str, timeout: float = 3.0) -> str:
     hf_token = get_secret("medilink/production/hf-api-key")
     if not hf_token or hf_token == "REPLACE_ME_MANUALLY_IN_CONSOLE":
-        raise HTTPException(status_code=503, detail="AI service not configured")
+        raise Exception("AI service not configured")
 
     headers = {"Authorization": f"Bearer {hf_token}"}
     payload = {
-        "inputs": f"Patient symptoms: {data.message}. What could this be? Keep it brief and suggest consulting a doctor.",
+        "inputs": f"Patient symptoms: {message}. What could this be? Keep it brief and suggest consulting a doctor.",
         "parameters": {"max_new_tokens": 100}
     }
     
-    # Using Zephyr 7B Beta via Hugging Face Serverless Inference API
     API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
-    
     async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.post(API_URL, headers=headers, json=payload, timeout=10.0)
-            if resp.status_code != 200:
-                print(f"HF Error: {resp.status_code} - {resp.text}")
-                raise HTTPException(status_code=500, detail="AI processing failed")
-            
-            result = resp.json()
-            reply = result[0].get("generated_text", "Sorry, I could not process your symptoms.").replace(payload["inputs"], "").strip()
-            return {"reply": reply}
-        except Exception as e:
-            print(f"Chat error: {e}")
-            raise HTTPException(status_code=500, detail="Failed to connect to AI service")
+        resp = await client.post(API_URL, headers=headers, json=payload, timeout=timeout)
+        resp.raise_for_status()
+        result = resp.json()
+        return result[0].get("generated_text", "Sorry, I could not process your symptoms.").replace(payload["inputs"], "").strip()
+
+async def call_groq(message: str, timeout: float = 2.0) -> str:
+    groq_token = get_secret("medilink/production/groq-api-key")
+    if not groq_token or groq_token == "REPLACE_ME_MANUALLY_IN_CONSOLE":
+        raise Exception("Groq not configured")
+
+    headers = {
+        "Authorization": f"Bearer {groq_token}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama3-8b-8192",
+        "messages": [{"role": "user", "content": f"Patient symptoms: {message}. What could this be? Keep it brief and suggest consulting a doctor."}],
+        "max_tokens": 100
+    }
+    API_URL = "https://api.groq.com/openai/v1/chat/completions"
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(API_URL, headers=headers, json=payload, timeout=timeout)
+        resp.raise_for_status()
+        result = resp.json()
+        return result["choices"][0]["message"]["content"].strip()
+
+async def use_groq_or_fallback(message: str):
+    try:
+        response = await call_groq(message, timeout=2.0)
+        logger.info("Groq success")
+        return {
+            "reply": response,
+            "source": "groq",
+            "is_fallback": True
+        }
+    except Exception as e:
+        logger.warning("Groq also failed", extra={"error": str(e)})
+        
+        # Conversational rule-based fallback
+        msg_lower = message.lower()
+        if "fever" in msg_lower:
+            reply = "You may have a fever. Stay hydrated and monitor your temperature. Can you describe any other symptoms?"
+        elif "pain" in msg_lower:
+            reply = "Can you describe where the pain is located and how severe it is?"
+        else:
+            reply = "I'm having trouble accessing my AI services right now, but I'm here to help with general health questions. Could you provide more details about how you're feeling?"
+
+        return {
+            "reply": reply,
+            "source": "system",
+            "is_fallback": True
+        }
+
+@app.post("/chat")
+async def chat_endpoint(data: ChatRequest, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    global hf_down_until
+
+    if user["role"] != "patient":
+        raise HTTPException(status_code=403, detail="Only patients can use the symptom checker")
+
+    # Skip HF if it's marked down
+    if time.time() < hf_down_until:
+        return await use_groq_or_fallback(data.message)
+
+    try:
+        response = await call_huggingface(data.message, timeout=3.0)
+        logger.info("HF success")
+        return {
+            "reply": response,
+            "source": "hf",
+            "is_fallback": False
+        }
+    except Exception as e:
+        # Circuit breaker trigger
+        hf_down_until = time.time() + 60
+        logger.warning("HF timeout/failure", extra={"error": str(e)})
+        return await use_groq_or_fallback(data.message)
