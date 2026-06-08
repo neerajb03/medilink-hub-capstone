@@ -44,7 +44,8 @@ export default defineConfig({
       // Appointment service routes
       '/appointments': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8002`),
       // Health records service routes
-      '/records': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8003`),
+      '/health-records': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8003`),
+      '/chat': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8003`),
       // Document service routes
       '/documents': apiProxy(IS_AWS ? `${INTERNAL_ALB}` : `${INTERNAL_ALB}:8004`),
     }
