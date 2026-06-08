@@ -4,6 +4,18 @@ resource "aws_s3_bucket" "documents" {
   force_destroy = false
 }
 
+resource "aws_s3_bucket_cors_configuration" "documents_cors" {
+  bucket = aws_s3_bucket.documents.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT", "POST", "GET"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
 # Enable Server Side Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "documents_enc" {
   bucket = aws_s3_bucket.documents.id

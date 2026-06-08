@@ -172,7 +172,7 @@ async def create_record(
     record = Record(
         patient_id=data.patient_id,
         doctor_id=user["user_id"],
-        appointment_id=data.appointment_id,
+        appointment_id=data.appointment_id if data.appointment_id else None,
         title=data.title,
         description=data.description,
         diagnosis=data.diagnosis,
