@@ -186,7 +186,7 @@ async def create_record(
         await db.commit()
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Database error. Possible duplicate appointment_id.")
+        raise HTTPException(status_code=400, detail=f"Database error. Possible duplicate appointment_id. Error: {str(e)}")
     await db.refresh(record)
 
     return {
