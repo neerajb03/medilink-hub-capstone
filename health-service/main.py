@@ -159,7 +159,7 @@ async def create_record(
     if data.appointment_id:
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}")
+            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", headers={"Authorization": f"Bearer {user['token']}"})
             if resp.status_code == 200:
                 appt = resp.json()
                 if appt.get("status") != "completed":

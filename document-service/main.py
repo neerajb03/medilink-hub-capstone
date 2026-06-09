@@ -192,7 +192,7 @@ async def get_presigned_url(
         import httpx
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", timeout=10.0)
+            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", timeout=10.0, headers={"Authorization": f"Bearer {user['token']}"})
             if resp.status_code != 200:
                 raise HTTPException(status_code=400, detail="Failed to validate appointment or appointment not found")
             appt = resp.json()
@@ -277,7 +277,7 @@ async def list_documents(
         import httpx
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{appointment_id}", timeout=10.0)
+            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{appointment_id}", timeout=10.0, headers={"Authorization": f"Bearer {user['token']}"})
             if resp.status_code != 200:
                 raise HTTPException(status_code=400, detail="Invalid appointment")
             appt = resp.json()

@@ -16,7 +16,7 @@ def create_token(user_id: str, role: str) -> str:
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
         payload = jwt.decode(credentials.credentials, SECRET, algorithms=[ALGORITHM])
-        return {"user_id": payload["user_id"], "role": payload["role"]}
+        return {"user_id": payload["user_id"], "role": payload["role"], "token": credentials.credentials}
     except JWTError:
         raise HTTPException(
             status_code=401,
