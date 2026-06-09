@@ -20,7 +20,7 @@ output "rds_endpoint" {
 
 output "s3_bucket_name" {
   description = "S3 Medical Files Bucket Name"
-  value       = aws_s3_bucket.documents.bucket
+  value       = module.documents_bucket.s3_bucket_id
 }
 
 output "kms_key_arn" {

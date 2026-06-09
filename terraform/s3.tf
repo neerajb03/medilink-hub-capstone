@@ -1,40 +1,56 @@
 # --- S3 Bucket for Medical Documents ---
-resource "aws_s3_bucket" "documents" {
+module "documents_bucket" {
+  source  = "terraform-aws-modules/s3-bucket/aws"
+  version = "~> 4.0"
+
   bucket        = "medilink-docs-production-bucket"
   force_destroy = false
-}
 
-resource "aws_s3_bucket_cors_configuration" "documents_cors" {
-  bucket = aws_s3_bucket.documents.id
-
-  cors_rule {
-    allowed_headers = ["*"]
-    allowed_methods = ["PUT", "POST", "GET"]
-    allowed_origins = ["*"]
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3000
-  }
-}
-
-# Enable Server Side Encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "documents_enc" {
-  bucket = aws_s3_bucket.documents.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.medilink.arn
-    }
-    bucket_key_enabled = true
-  }
-}
-
-# Block all Public Access to keep clinical records strictly private
-resource "aws_s3_bucket_public_access_block" "documents_block" {
-  bucket                  = aws_s3_bucket.documents.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        kms_master_key_id = aws_kms_key.medilink.arn
+        sse_algorithm     = "aws:kms"
+      }
+      bucket_key_enabled = true
+    }
+  }
+
+  cors_rule = [
+    {
+      allowed_headers = ["*"]
+      allowed_methods = ["PUT", "POST", "GET"]
+      allowed_origins = ["*"]
+      expose_headers  = ["ETag"]
+      max_age_seconds = 3000
+    }
+  ]
+}
+
+# --- Zero-Downtime State Migration (Moved Blocks) ---
+moved {
+  from = aws_s3_bucket.documents
+  to   = module.documents_bucket.aws_s3_bucket.this[0]
+}
+
+moved {
+  from = aws_s3_bucket_cors_configuration.documents_cors
+  to   = module.documents_bucket.aws_s3_bucket_cors_configuration.this[0]
+}
+
+moved {
+  from = aws_s3_bucket_server_side_encryption_configuration.documents_enc
+  to   = module.documents_bucket.aws_s3_bucket_server_side_encryption_configuration.this[0]
+}
+
+moved {
+  from = aws_s3_bucket_public_access_block.documents_block
+  to   = module.documents_bucket.aws_s3_bucket_public_access_block.this[0]
 }
 
 # --- IAM Policy for Private EC2 Instances to Access S3 Bucket ---
@@ -71,7 +87,7 @@ resource "aws_iam_role_policy" "backend_consolidated" {
           "s3:GetObject",
           "s3:DeleteObject"
         ]
-        Resource = "${aws_s3_bucket.documents.arn}/*"
+        Resource = "${module.documents_bucket.s3_bucket_arn}/*"
       },
       {
         Sid    = "S3List"
@@ -79,7 +95,7 @@ resource "aws_iam_role_policy" "backend_consolidated" {
         Action = [
           "s3:ListBucket"
         ]
-        Resource = aws_s3_bucket.documents.arn
+        Resource = module.documents_bucket.s3_bucket_arn
       },
       # Secrets Manager
       {

@@ -122,7 +122,7 @@ for db in ['user_db', 'appointment_db', 'health_db', 'document_db']:
     print(f'{db}: Created' if r.returncode == 0 else f'{db}: {r.stderr.strip()}')
 "
 
-export S3_BUCKET_NAME="${aws_s3_bucket.documents.bucket}"
+export S3_BUCKET_NAME="${module.documents_bucket.s3_bucket_id}"
 export S3_ENDPOINT=""
 export AWS_DEFAULT_REGION="us-east-1"
 export SQS_QUEUE_URL="${aws_sqs_queue.appointment_events.url}"
