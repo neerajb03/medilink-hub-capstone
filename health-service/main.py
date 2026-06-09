@@ -186,7 +186,9 @@ async def create_record(
         await db.commit()
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=400, detail=f"Database error. Possible duplicate appointment_id. Error: {str(e)}")
+        if "uniq_health_record_per_appointment" in str(e):
+            raise HTTPException(status_code=400, detail="A health record has already been created for this appointment.")
+        raise HTTPException(status_code=400, detail="Database error while saving health record.")
     await db.refresh(record)
 
     return {
