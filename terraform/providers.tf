@@ -10,7 +10,6 @@ terraform {
     bucket       = "medilink-tf-state-371454942267"
     key          = "medilink/dev/terraform.tfstate"
     region       = "us-east-1"
-    use_lockfile = true
     encrypt      = true
   }
 }

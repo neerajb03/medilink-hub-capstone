@@ -94,7 +94,7 @@ resource "aws_security_group" "internal_alb" {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.frontend_asg.id, aws_security_group.backend_asg.id]
+    security_groups = [aws_security_group.frontend_asg.id]
   }
 
   egress {
@@ -105,6 +105,15 @@ resource "aws_security_group" "internal_alb" {
   }
 
   tags = { Name = "medilink-internal-alb-sg" }
+}
+
+resource "aws_security_group_rule" "internal_alb_from_backend" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.internal_alb.id
+  source_security_group_id = aws_security_group.backend_asg.id
 }
 
 # --- Backend API Security Group ---

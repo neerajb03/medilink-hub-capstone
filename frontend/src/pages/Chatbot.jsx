@@ -70,12 +70,6 @@ export default function Chatbot() {
               <div key={index} className={`message-wrapper ${msg.sender}`}>
                 <div className="message-bubble">
                   {msg.text}
-                </div>
-                {msg.isFallback && (
-                  <div className="fallback-warning">
-                    ⚠️ Service is slow right now. Showing fallback response.
-                  </div>
-                )}
               </div>
             ))}
             {loading && (
