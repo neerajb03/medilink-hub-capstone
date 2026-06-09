@@ -4,8 +4,13 @@ output "vpc_id" {
 }
 
 output "external_alb_dns" {
-  description = "Public domain to access MediLink Hub"
+  description = "Public domain to access MediLink Hub directly (blocked)"
   value       = aws_lb.external.dns_name
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront Domain Name for Dynamic Content Delivery"
+  value       = aws_cloudfront_distribution.main.domain_name
 }
 
 output "internal_alb_dns" {

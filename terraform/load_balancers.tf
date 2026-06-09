@@ -1,57 +1,3 @@
-# --- External Web Application Firewall (WAF) ---
-resource "aws_wafv2_web_acl" "waf" {
-  name        = "medilink-production-waf"
-  description = "Protects frontend web interface from malicious injection and bots"
-  scope       = "REGIONAL"
-
-  default_action {
-    allow {}
-  }
-
-  # AWS Managed Common Rule Set
-  rule {
-    name     = "AWSManagedRulesCommonRuleSet"
-    priority = 1
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-
-        # Prevent WAF from blocking file uploads (which are > 8KB and binary)
-        rule_action_override {
-          name = "SizeRestrictions_BODY"
-          action_to_use {
-            count {}
-          }
-        }
-        rule_action_override {
-          name = "CrossSiteScripting_BODY"
-          action_to_use {
-            count {}
-          }
-        }
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "AWSManagedRulesCommonRuleSetMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "medilinkWafMetric"
-    sampled_requests_enabled   = true
-  }
-}
-
 # --- External Public Load Balancer ---
 resource "aws_lb" "external" {
   name               = "medilink-external-alb"
@@ -60,12 +6,6 @@ resource "aws_lb" "external" {
   security_groups    = [aws_security_group.external_alb.id]
   subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
   tags               = { Name = "medilink-external-alb" }
-}
-
-# Connect WAF to External Load Balancer
-resource "aws_wafv2_web_acl_association" "external_lb" {
-  resource_arn = aws_lb.external.arn
-  web_acl_arn  = aws_wafv2_web_acl.waf.arn
 }
 
 # --- Target Groups ---
@@ -93,10 +33,30 @@ resource "aws_lb_listener" "external_http" {
   port              = "80"
   protocol          = "HTTP"
 
-  # Default: Forward all traffic to the frontend application
   default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Forbidden - Direct Access Blocked"
+      status_code  = "403"
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "allow_cloudfront" {
+  listener_arn = aws_lb_listener.external_http.arn
+  priority     = 10
+
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.frontend.arn
+  }
+
+  condition {
+    http_header {
+      http_header_name = "X-CloudFront-Auth"
+      values           = [random_password.cloudfront_auth.result]
+    }
   }
 }
 
