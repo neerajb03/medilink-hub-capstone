@@ -190,7 +190,6 @@ async def get_presigned_url(
             
         # Verify appointment belongs to doctor
         import httpx
-        import os
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
         async with httpx.AsyncClient() as client:
             resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", timeout=10.0)
@@ -270,13 +269,12 @@ async def list_documents(
     query = select(Document).where(Document.is_deleted == False).limit(limit).offset(offset)
 
     if user["role"] == "patient":
-        query = query.where(Document.patient_id == user["user_id"])
+        query = query.where(Document.patient_id == UUID(user["user_id"]))
     elif user["role"] == "doctor":
         if not appointment_id:
             return []
         
         import httpx
-        import os
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
         async with httpx.AsyncClient() as client:
             resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{appointment_id}", timeout=10.0)
@@ -286,7 +284,7 @@ async def list_documents(
             if appt.get("doctor_id") != user["user_id"]:
                 raise HTTPException(status_code=403, detail="Unauthorized for this appointment")
                 
-        query = query.where(Document.record_id == appointment_id)
+        query = query.where(Document.record_id == UUID(appointment_id))
 
     result = await db.execute(query)
     documents = result.scalars().all()
