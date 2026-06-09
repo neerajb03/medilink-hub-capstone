@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from sqlalchemy import Column, Text, DateTime, Boolean
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.future import select
@@ -34,9 +34,9 @@ class Base(DeclarativeBase):
 
 class Document(Base):
     __tablename__ = "documents"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    patient_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    record_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    patient_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    record_id = Column(PG_UUID(as_uuid=True), nullable=True, index=True)
     file_name = Column(Text, nullable=False)
     s3_key = Column(Text, nullable=False)
     uploaded_by = Column(Text, nullable=False)
@@ -45,7 +45,7 @@ class Document(Base):
     
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_by_user_id = Column(UUID(as_uuid=True), nullable=False)
+    created_by_user_id = Column(PG_UUID(as_uuid=True), nullable=False)
     created_by_role = Column(Text, nullable=False)
     is_deleted = Column(Boolean, default=False, index=True)
 

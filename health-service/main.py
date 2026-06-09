@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, field_validator
 from sqlalchemy import Column, Text, DateTime, Boolean, Index
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.future import select
@@ -32,10 +32,10 @@ class Base(DeclarativeBase):
 
 class Record(Base):
     __tablename__ = "health_records"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    patient_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    doctor_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    appointment_id = Column(UUID(as_uuid=True), nullable=True)
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    patient_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    doctor_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    appointment_id = Column(PG_UUID(as_uuid=True), nullable=True)
     title = Column(Text, nullable=True)
     description = Column(Text, nullable=False)
     diagnosis = Column(Text, nullable=True)
@@ -43,7 +43,7 @@ class Record(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_by_user_id = Column(UUID(as_uuid=True), nullable=False)
+    created_by_user_id = Column(PG_UUID(as_uuid=True), nullable=False)
     created_by_role = Column(Text, nullable=False)
     is_deleted = Column(Boolean, default=False, index=True)
     
