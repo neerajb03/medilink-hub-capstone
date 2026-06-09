@@ -1,5 +1,5 @@
 import os
-from uuid import uuid4
+from uuid import uuid4, UUID
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -171,14 +171,14 @@ async def create_record(
                 raise HTTPException(status_code=400, detail="Failed to validate appointment or appointment not found")
 
     record = Record(
-        patient_id=data.patient_id,
-        doctor_id=user["user_id"],
-        appointment_id=data.appointment_id if data.appointment_id else None,
+        patient_id=UUID(data.patient_id),
+        doctor_id=UUID(user["user_id"]),
+        appointment_id=UUID(data.appointment_id) if data.appointment_id else None,
         title=data.title,
         description=data.description,
         diagnosis=data.diagnosis,
         prescription_text=data.prescription_text,
-        created_by_user_id=user["user_id"],
+        created_by_user_id=UUID(user["user_id"]),
         created_by_role=user["role"]
     )
     db.add(record)
