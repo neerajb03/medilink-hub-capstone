@@ -117,7 +117,7 @@ app.add_middleware(
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from logging_config import request_id_var
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -153,7 +153,7 @@ async def global_handler(request: Request, exc: Exception):
             "error": {
                 "code": "INTERNAL_ERROR",
                 "message": "Server error",
-                "details": "",
+                "details": str(exc),
             }
         },
     )
@@ -221,14 +221,14 @@ async def get_presigned_url(
 
     doc = Document(
         id=doc_id,
-        patient_id=patient_id,
-        record_id=data.appointment_id if data.appointment_id else None,
+        patient_id=UUID(patient_id),
+        record_id=UUID(data.appointment_id) if data.appointment_id else None,
         file_name=data.file_name,
         s3_key=object_name,
         uploaded_by=user["role"],
         file_type=data.file_type,
         status="PENDING",
-        created_by_user_id=user["user_id"],
+        created_by_user_id=UUID(user["user_id"]),
         created_by_role=user["role"]
     )
     db.add(doc)
