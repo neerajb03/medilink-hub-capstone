@@ -23,11 +23,41 @@ def lambda_handler(event, context):
             user_id = body.get('user_id')
             status = body.get('status')
             
-            message = f"Update for Appointment {appointment_id}: Status changed to {status}"
+            if status == "pending":
+                message = (
+                    f"Hello,\n\n"
+                    f"Your appointment (ID: {appointment_id}) has been successfully requested.\n"
+                    f"It is currently pending approval from the doctor."
+                )
+                subject = "Appointment Requested - Pending Approval"
+            elif status == "accepted":
+                message = (
+                    f"Great news!\n\n"
+                    f"Your appointment (ID: {appointment_id}) has been officially accepted by the doctor.\n"
+                    f"We look forward to seeing you."
+                )
+                subject = "Appointment Accepted!"
+            elif status == "completed":
+                message = (
+                    f"Hello,\n\n"
+                    f"Your appointment (ID: {appointment_id}) has been marked as completed.\n"
+                    f"You can now securely view any associated health records and documents on the MediLink portal."
+                )
+                subject = "Appointment Completed - Records Available"
+            elif status == "denied":
+                message = (
+                    f"Hello,\n\n"
+                    f"Unfortunately, your appointment request (ID: {appointment_id}) could not be accepted at this time.\n"
+                    f"Please try scheduling a different time slot through the portal."
+                )
+                subject = "Appointment Update - Request Denied"
+            else:
+                message = f"Update for Appointment {appointment_id}: Status changed to {status}"
+                subject = "MediLink Appointment Update"
             
             sns.publish(
                 TopicArn=TOPIC_ARN,
-                Subject="MediLink Appointment Update",
+                Subject=subject,
                 Message=message
             )
             
