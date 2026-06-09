@@ -41,8 +41,8 @@ resource "aws_iam_role_policy" "lambda_worker_policy" {
       },
       {
         Effect = "Allow"
-        Action = "sns:Publish"
-        Resource = aws_sns_topic.appointment_notifications.arn
+        Action = "ses:SendEmail"
+        Resource = "*"
       },
       {
         Effect = "Allow"
@@ -75,7 +75,7 @@ resource "aws_lambda_function" "notification_worker" {
 
   environment {
     variables = {
-      SNS_TOPIC_ARN = aws_sns_topic.appointment_notifications.arn
+      ADMIN_EMAIL = "medilinkhub.team@gmail.com"
     }
   }
 

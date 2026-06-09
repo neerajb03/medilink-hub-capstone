@@ -255,6 +255,7 @@ async def get_user_by_id(
     return {
         "id": str(user.id),
         "name": user.name,
+        "email": user.email,
         "role": user.role,
     }
 

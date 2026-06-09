@@ -27,12 +27,32 @@ from auth.jwt import get_current_user
 sqs = boto3.client('sqs', region_name='us-east-1')
 SQS_QUEUE_URL = os.getenv("SQS_QUEUE_URL")
 
-def publish_appointment_event(appointment_id: str, patient_id: str, doctor_id: str, status: str):
+async def publish_appointment_event(appointment_id: str, patient_id: str, doctor_id: str, status: str, token: str):
     if not SQS_QUEUE_URL:
         print(f"Warning: SQS_QUEUE_URL not set. Skipping event for {appointment_id}")
         return
     try:
         from logging_config import request_id_var
+        import httpx
+        
+        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        patient_name = "Patient"
+        patient_email = ""
+        doctor_name = "Doctor"
+        doctor_email = ""
+        
+        async with httpx.AsyncClient() as client:
+            p_resp = await client.get(f"{INTERNAL_ALB_DNS}/users/{patient_id}", headers={"Authorization": f"Bearer {token}"}, timeout=5.0)
+            if p_resp.status_code == 200:
+                p_data = p_resp.json()
+                patient_name = p_data.get("name", patient_name)
+                patient_email = p_data.get("email", patient_email)
+                
+            d_resp = await client.get(f"{INTERNAL_ALB_DNS}/users/{doctor_id}", headers={"Authorization": f"Bearer {token}"}, timeout=5.0)
+            if d_resp.status_code == 200:
+                d_data = d_resp.json()
+                doctor_name = d_data.get("name", doctor_name)
+                doctor_email = d_data.get("email", doctor_email)
         
         sqs.send_message(
             QueueUrl=SQS_QUEUE_URL,
@@ -41,6 +61,10 @@ def publish_appointment_event(appointment_id: str, patient_id: str, doctor_id: s
                 "appointment_id": str(appointment_id),
                 "patient_id": str(patient_id),
                 "doctor_id": str(doctor_id),
+                "patient_name": patient_name,
+                "patient_email": patient_email,
+                "doctor_name": doctor_name,
+                "doctor_email": doctor_email,
                 "status": status,
                 "x_request_id": request_id_var.get()
             })
@@ -215,7 +239,7 @@ async def create_appointment(
     await db.commit()
     await db.refresh(appt)
 
-    publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "pending")
+    await publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "pending", user["token"])
 
     return {
         "id": str(appt.id),
@@ -247,7 +271,7 @@ async def accept_appointment(
     await db.commit()
     await db.refresh(appt)
     
-    publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "accepted")
+    await publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "accepted", user["token"])
     return {"status": "success", "appointment_id": str(appt.id)}
 
 @app.put("/appointments/{appt_id}/deny")
@@ -271,7 +295,7 @@ async def deny_appointment(
     await db.commit()
     await db.refresh(appt)
     
-    publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "denied")
+    await publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "denied", user["token"])
     return {"status": "success", "appointment_id": str(appt.id)}
 
 @app.put("/appointments/{appt_id}/complete")
@@ -295,7 +319,7 @@ async def complete_appointment(
     await db.commit()
     await db.refresh(appt)
     
-    publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "completed")
+    await publish_appointment_event(str(appt.id), str(appt.patient_id), str(appt.doctor_id), "completed", user["token"])
     return {"status": "success", "appointment_id": str(appt.id)}
 
 
