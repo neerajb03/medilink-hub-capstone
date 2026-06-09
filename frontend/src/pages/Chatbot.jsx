@@ -70,6 +70,7 @@ export default function Chatbot() {
               <div key={index} className={`message-wrapper ${msg.sender}`}>
                 <div className="message-bubble">
                   {msg.text}
+                </div>
               </div>
             ))}
             {loading && (
