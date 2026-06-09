@@ -340,6 +340,50 @@ async def list_appointments(
     ]
 
 
+@app.get("/appointments/{appt_id}")
+async def get_appointment(
+    appt_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    appt = result.scalar_one_or_none()
+    
+    if not appt:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Appointment not found",
+                    "details": "",
+                }
+            },
+        )
+        
+    # Only the assigned patient or doctor (or an admin/system role) can view the appointment
+    if user["role"] not in ["admin", "system"]:
+        if str(appt.patient_id) != user["user_id"] and str(appt.doctor_id) != user["user_id"]:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": {
+                        "code": "FORBIDDEN",
+                        "message": "You are not authorized to view this appointment",
+                        "details": "",
+                    }
+                },
+            )
+
+    return {
+        "id": str(appt.id),
+        "patient_id": str(appt.patient_id),
+        "doctor_id": str(appt.doctor_id),
+        "datetime": appt.datetime.isoformat(),
+        "status": appt.status,
+    }
+
+
 @app.put("/appointments/{appt_id}")
 async def update_appointment(
     appt_id: str,
