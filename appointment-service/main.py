@@ -36,6 +36,9 @@ async def publish_appointment_event(appointment_id: str, patient_id: str, doctor
         import httpx
         
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        if not INTERNAL_ALB_DNS.startswith("http"):
+            INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
+            
         patient_name = "Patient"
         patient_email = ""
         doctor_name = "Doctor"
@@ -221,6 +224,9 @@ async def create_appointment(
     if data.doctor_id:
         # Cross-service validation: ensure the assigned doctor exists and is actually a doctor
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        if not INTERNAL_ALB_DNS.startswith("http"):
+            INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
+            
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(f"{INTERNAL_ALB_DNS}/users/{data.doctor_id}")
@@ -245,7 +251,7 @@ async def create_appointment(
         "id": str(appt.id),
         "patient_id": str(appt.patient_id),
         "doctor_id": str(appt.doctor_id),
-        "datetime": appt.datetime.isoformat(),
+        "datetime": appt.datetime.isoformat() + "Z",
         "status": appt.status,
     }
 
@@ -357,7 +363,7 @@ async def list_appointments(
             "id": str(a.id),
             "patient_id": str(a.patient_id),
             "doctor_id": str(a.doctor_id),
-            "datetime": a.datetime.isoformat(),
+            "datetime": a.datetime.isoformat() + "Z",
             "status": a.status,
         }
         for a in appointments
@@ -403,7 +409,7 @@ async def get_appointment(
         "id": str(appt.id),
         "patient_id": str(appt.patient_id),
         "doctor_id": str(appt.doctor_id),
-        "datetime": appt.datetime.isoformat(),
+        "datetime": appt.datetime.isoformat() + "Z",
         "status": appt.status,
     }
 
@@ -468,7 +474,7 @@ async def update_appointment(
     return {
         "patient_id": str(appt.patient_id),
         "doctor_id": str(appt.doctor_id) if appt.doctor_id else None,
-        "datetime": appt.datetime.isoformat(),
+        "datetime": appt.datetime.isoformat() + "Z",
         "status": appt.status,
     }
 

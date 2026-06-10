@@ -191,17 +191,26 @@ async def get_presigned_url(
         # Verify appointment belongs to doctor
         import httpx
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", timeout=10.0, headers={"Authorization": f"Bearer {user['token']}"})
-            if resp.status_code != 200:
-                raise HTTPException(status_code=400, detail="Failed to validate appointment or appointment not found")
-            appt = resp.json()
-            if appt.get("doctor_id") != user["user_id"]:
-                raise HTTPException(status_code=403, detail="You can only upload documents for your own appointments")
-            if appt.get("status") != "completed":
-                raise HTTPException(status_code=400, detail="Complete appointment first")
+        if not INTERNAL_ALB_DNS.startswith("http"):
+            INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
             
-            patient_id = appt.get("patient_id")
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", timeout=10.0, headers={"Authorization": f"Bearer {user['token']}"})
+                if resp.status_code == 200:
+                    appt = resp.json()
+                    if appt.get("status") != "completed":
+                        raise HTTPException(status_code=400, detail="Document can only be uploaded for a completed appointment")
+                    if appt.get("doctor_id") != user["user_id"]:
+                        raise HTTPException(status_code=403, detail="You can only upload documents for your own appointments")
+                    patient_id = appt.get("patient_id")
+                else:
+                    raise HTTPException(status_code=400, detail="Failed to validate appointment or appointment not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to communicate with appointment service: {e}")
+            raise HTTPException(status_code=503, detail="Appointment service unavailable")
 
     ext = data.file_name.split(".")[-1] if "." in data.file_name else "bin"
     rec_part = data.appointment_id if data.appointment_id else "no-record"
@@ -276,13 +285,25 @@ async def list_documents(
         
         import httpx
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{appointment_id}", timeout=10.0, headers={"Authorization": f"Bearer {user['token']}"})
-            if resp.status_code != 200:
-                raise HTTPException(status_code=400, detail="Invalid appointment")
-            appt = resp.json()
-            if appt.get("doctor_id") != user["user_id"]:
-                raise HTTPException(status_code=403, detail="Unauthorized for this appointment")
+        if not INTERNAL_ALB_DNS.startswith("http"):
+            INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
+            
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{appointment_id}", timeout=10.0, headers={"Authorization": f"Bearer {user['token']}"})
+                if resp.status_code == 200:
+                    appt = resp.json()
+                    if user["role"] == "patient" and appt.get("patient_id") != user["user_id"]:
+                        raise HTTPException(status_code=403, detail="Access denied")
+                    if user["role"] == "doctor" and appt.get("doctor_id") != user["user_id"]:
+                        raise HTTPException(status_code=403, detail="Access denied")
+                else:
+                    raise HTTPException(status_code=400, detail="Appointment validation failed")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to communicate with appointment service: {e}")
+            raise HTTPException(status_code=503, detail="Appointment service unavailable")
                 
         query = query.where(Document.record_id == UUID(appointment_id))
 

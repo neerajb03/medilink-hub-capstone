@@ -156,29 +156,45 @@ async def create_record(
     if user["role"] != "doctor":
         raise HTTPException(status_code=403, detail="Only doctors can create health records")
 
-    if data.appointment_id:
+    try:
+        patient_uuid = UUID(data.patient_id)
+        doctor_uuid = UUID(user["user_id"])
+        appointment_uuid = UUID(data.appointment_id) if data.appointment_id else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format for patient or appointment ID. Please select a valid patient.")
+
+    if appointment_uuid:
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", headers={"Authorization": f"Bearer {user['token']}"})
-            if resp.status_code == 200:
-                appt = resp.json()
-                if appt.get("status") != "completed":
-                    raise HTTPException(status_code=400, detail="Health record can only be created for a completed appointment")
-                if appt.get("doctor_id") != user["user_id"]:
-                    raise HTTPException(status_code=403, detail="You can only create health records for your own appointments")
-            else:
-                # Strict enforcement as per user rules
-                raise HTTPException(status_code=400, detail="Failed to validate appointment or appointment not found")
+        if not INTERNAL_ALB_DNS.startswith("http"):
+            INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
+            
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{str(appointment_uuid)}", headers={"Authorization": f"Bearer {user['token']}"})
+                if resp.status_code == 200:
+                    appt = resp.json()
+                    if appt.get("status") != "completed":
+                        raise HTTPException(status_code=400, detail="Health record can only be created for a completed appointment")
+                    if appt.get("doctor_id") != user["user_id"]:
+                        raise HTTPException(status_code=403, detail="You can only create health records for your own appointments")
+                else:
+                    # Strict enforcement as per user rules
+                    raise HTTPException(status_code=400, detail="Failed to validate appointment or appointment not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to communicate with appointment service: {e}")
+            raise HTTPException(status_code=503, detail="Appointment service unavailable")
 
     record = Record(
-        patient_id=UUID(data.patient_id),
-        doctor_id=UUID(user["user_id"]),
-        appointment_id=UUID(data.appointment_id) if data.appointment_id else None,
+        patient_id=patient_uuid,
+        doctor_id=doctor_uuid,
+        appointment_id=appointment_uuid,
         title=data.title,
         description=data.description,
         diagnosis=data.diagnosis,
         prescription_text=data.prescription_text,
-        created_by_user_id=UUID(user["user_id"]),
+        created_by_user_id=doctor_uuid,
         created_by_role=user["role"]
     )
     db.add(record)
@@ -328,27 +344,34 @@ async def chat_endpoint(data: ChatRequest, user=Depends(get_current_user), db: A
     if data.appointment_id:
         # Fetch appointment details
         INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}", timeout=5.0)
-            if resp.status_code == 200:
-                appt = resp.json()
-                # Ensure doctor owns the appointment (or patient)
-                if user["role"] == "admin" or appt.get("doctor_id") == user["user_id"] or appt.get("patient_id") == user["user_id"]:
-                    patient_id = appt.get("patient_id")
-                    
-                    # Fetch patient history from DB
-                    from sqlalchemy import select
-                    records = await db.execute(select(HealthRecord).where(HealthRecord.patient_id == patient_id))
-                    history = records.scalars().all()
-                    
-                    context_prefix = "Patient Medical Context:\n"
-                    if history:
-                        for idx, r in enumerate(history[-5:]): # Last 5 records
-                            context_prefix += f"- Record {idx+1}: {r.diagnosis or 'No diagnosis'}. {r.description}\n"
-                    else:
-                        context_prefix += "No prior medical records found.\n"
-                    
-                    context_msg = f"{context_prefix}\nDoctor Query: {data.message}"
+        if not INTERNAL_ALB_DNS.startswith("http"):
+            INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
+            
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{data.appointment_id}")
+                if resp.status_code == 200:
+                    appt = resp.json()
+                    # Ensure doctor owns the appointment (or patient)
+                    if user["role"] == "admin" or appt.get("doctor_id") == user["user_id"] or appt.get("patient_id") == user["user_id"]:
+                        patient_id = appt.get("patient_id")
+                        
+                        # Fetch patient history from DB
+                        from sqlalchemy import select
+                        records = await db.execute(select(HealthRecord).where(HealthRecord.patient_id == patient_id))
+                        history = records.scalars().all()
+                        
+                        context_prefix = "Patient Medical Context:\n"
+                        if history:
+                            for idx, r in enumerate(history[-5:]): # Last 5 records
+                                context_prefix += f"- Record {idx+1}: {r.diagnosis or 'No diagnosis'}. {r.description}\n"
+                        else:
+                            context_prefix += "No prior medical records found.\n"
+                        
+                        context_msg = f"{context_prefix}\nDoctor Query: {data.message}"
+        except Exception as e:
+            logger.error(f"Chat context fetch failed: {e}")
+            # Non-fatal, just continue with original message
 
     # Skip HF if it's marked down
     if time.time() < hf_down_until:
