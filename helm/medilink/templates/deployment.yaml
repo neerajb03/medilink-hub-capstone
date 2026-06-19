@@ -1,0 +1,2 @@
+# Deployments are defined in individual files per service for clarity.
+# See: user-service-deployment.yaml, appointment-service-deployment.yaml, etc.

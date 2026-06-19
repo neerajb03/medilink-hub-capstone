@@ -11,7 +11,7 @@ logger = setup_logger("document-service")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import Column, Text, DateTime, Boolean
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -41,6 +41,7 @@ class Document(Base):
     s3_key = Column(Text, nullable=False)
     uploaded_by = Column(Text, nullable=False)
     file_type = Column(Text, nullable=False)
+    category = Column(Text, nullable=False, default="other")
     status = Column(Text, default="PENDING")
     
     uploaded_at = Column(DateTime, default=datetime.utcnow)
@@ -159,10 +160,30 @@ async def global_handler(request: Request, exc: Exception):
     )
 
 
+VALID_CATEGORIES = [
+    "lab_report",
+    "prescription",
+    "imaging",
+    "discharge_summary",
+    "insurance",
+    "referral",
+    "consultation",
+    "other",
+]
+
+
 class PresignedUrlRequest(BaseModel):
     file_name: str
     file_type: str
+    category: str = "other"
     appointment_id: str | None = None
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v):
+        if v not in VALID_CATEGORIES:
+            raise ValueError(f"Invalid category. Must be one of: {', '.join(VALID_CATEGORIES)}")
+        return v
 
 # --- Routes ---
 @app.get("/health")
@@ -190,7 +211,7 @@ async def get_presigned_url(
             
         # Verify appointment belongs to doctor
         import httpx
-        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://appointment-service:8002")
         if not INTERNAL_ALB_DNS.startswith("http"):
             INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
             
@@ -235,6 +256,7 @@ async def get_presigned_url(
         s3_key=object_name,
         uploaded_by=user["role"],
         file_type=data.file_type,
+        category=data.category,
         status="PENDING",
         created_by_user_id=UUID(user["user_id"]),
         created_by_role=user["role"]
@@ -267,6 +289,7 @@ async def confirm_upload(
 @app.get("/documents")
 async def list_documents(
     appointment_id: str | None = None,
+    patient_id: str | None = None,
     limit: int = 10,
     offset: int = 0,
     user=Depends(get_current_user),
@@ -275,41 +298,64 @@ async def list_documents(
     if user["role"] not in ("patient", "doctor", "admin"):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    import httpx
+    INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://appointment-service:8002")
+    if not INTERNAL_ALB_DNS.startswith("http"):
+        INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
+
     query = select(Document).where(Document.is_deleted == False).limit(limit).offset(offset)
 
     if user["role"] == "patient":
         query = query.where(Document.patient_id == UUID(user["user_id"]))
+
     elif user["role"] == "doctor":
-        if not appointment_id:
-            return []
-        
-        import httpx
-        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
-        if not INTERNAL_ALB_DNS.startswith("http"):
-            INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
-            
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{INTERNAL_ALB_DNS}/appointments/{appointment_id}", timeout=10.0, headers={"Authorization": f"Bearer {user['token']}"})
-                if resp.status_code == 200:
+        if appointment_id:
+            # Filter by specific appointment — verify doctor owns it
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        f"{INTERNAL_ALB_DNS}/appointments/{appointment_id}",
+                        timeout=10.0,
+                        headers={"Authorization": f"Bearer {user['token']}"},
+                    )
+                    if resp.status_code != 200:
+                        raise HTTPException(status_code=400, detail="Appointment not found")
                     appt = resp.json()
-                    if user["role"] == "patient" and appt.get("patient_id") != user["user_id"]:
+                    if appt.get("doctor_id") != user["user_id"]:
                         raise HTTPException(status_code=403, detail="Access denied")
-                    if user["role"] == "doctor" and appt.get("doctor_id") != user["user_id"]:
-                        raise HTTPException(status_code=403, detail="Access denied")
-                else:
-                    raise HTTPException(status_code=400, detail="Appointment validation failed")
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Failed to communicate with appointment service: {e}")
-            raise HTTPException(status_code=503, detail="Appointment service unavailable")
-                
-        query = query.where(Document.record_id == UUID(appointment_id))
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Appointment service unavailable: {e}")
+                raise HTTPException(status_code=503, detail="Appointment service unavailable")
+            query = query.where(Document.record_id == UUID(appointment_id))
+
+        elif patient_id:
+            # Full patient history — verify doctor-patient relationship first
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        f"{INTERNAL_ALB_DNS}/appointments/check-relationship",
+                        params={"doctor_id": user["user_id"], "patient_id": patient_id},
+                        timeout=10.0,
+                        headers={"Authorization": f"Bearer {user['token']}"},
+                    )
+                    if resp.status_code != 200 or not resp.json().get("has_relationship"):
+                        raise HTTPException(status_code=403, detail="No doctor-patient relationship found")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Appointment service unavailable: {e}")
+                raise HTTPException(status_code=503, detail="Unable to verify access permissions")
+            query = query.where(Document.patient_id == UUID(patient_id))
+
+        else:
+            # No filter — return only docs the doctor uploaded
+            query = query.where(Document.created_by_user_id == UUID(user["user_id"]))
 
     result = await db.execute(query)
     documents = result.scalars().all()
-    
+
     return [
         {
             "id": str(d.id),
@@ -319,6 +365,7 @@ async def list_documents(
             "s3_key": d.s3_key,
             "uploaded_by": d.uploaded_by,
             "file_type": d.file_type,
+            "category": d.category,
             "status": d.status,
             "uploaded_at": d.uploaded_at.isoformat(),
         }
@@ -340,10 +387,27 @@ async def get_document(
 
     if user["role"] == "patient" and str(doc.patient_id) != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     if user["role"] == "doctor":
-        # Check doctor-patient relationship in a real app via API
-        pass
+        import httpx
+        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://appointment-service:8002")
+        if not INTERNAL_ALB_DNS.startswith("http"):
+            INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{INTERNAL_ALB_DNS}/appointments/check-relationship",
+                    params={"doctor_id": user["user_id"], "patient_id": str(doc.patient_id)},
+                    timeout=10.0,
+                    headers={"Authorization": f"Bearer {user['token']}"},
+                )
+                if resp.status_code != 200 or not resp.json().get("has_relationship"):
+                    raise HTTPException(status_code=403, detail="Access denied — no doctor-patient relationship")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to verify doctor-patient relationship: {e}")
+            raise HTTPException(status_code=503, detail="Unable to verify access permissions")
 
     # Generate presigned URL
     bucket = os.getenv("S3_BUCKET_NAME", "medilink-docs")

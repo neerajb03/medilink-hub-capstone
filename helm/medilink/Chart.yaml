@@ -1,0 +1,6 @@
+apiVersion: v2
+name: medilink
+description: MediLink Hub — EKS umbrella chart for all microservices and gateway
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

@@ -1,0 +1,92 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'terraform/**'
+      - '**.md'
+
+permissions:
+  id-token: write   # required for OIDC token exchange with AWS
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 371454942267.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  # ── Build all services and push to ECR ───────────────────────────────────
+  build-push:
+    name: Build & Push to ECR
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag from git SHA
+        id: tag
+        run: echo "tag=sha-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/medilink-github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push all service images
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          SERVICES="user-service appointment-service health-service document-service rag-service rag-worker frontend"
+          for svc in $SERVICES; do
+            echo "━━━ Building $svc ━━━"
+            docker build -t "$ECR_REGISTRY/$svc:$TAG" "./$svc"
+            docker push "$ECR_REGISTRY/$svc:$TAG"
+            echo "✓ Pushed: $ECR_REGISTRY/$svc:$TAG"
+          done
+
+  # ── Update gitops repo so ArgoCD picks up the new tag ────────────────────
+  update-gitops:
+    name: Update GitOps Repo
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH key for gitops repo
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GITOPS_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Clone medilink-gitops
+        run: git clone git@github.com:neerajb03/medilink-gitops.git /tmp/gitops
+
+      - name: Update imageTag in values.yaml
+        env:
+          TAG: ${{ needs.build-push.outputs.image_tag }}
+        run: |
+          cd /tmp/gitops
+          # yq is available on ubuntu-latest runners
+          yq e ".global.imageTag = \"$TAG\"" -i values.yaml
+          echo "Updated imageTag → $TAG"
+          cat values.yaml
+
+      - name: Commit and push if changed
+        env:
+          TAG: ${{ needs.build-push.outputs.image_tag }}
+        run: |
+          cd /tmp/gitops
+          git config user.email "ci-bot@medilink-hub.com"
+          git config user.name "MediLink CI Bot"
+          git add values.yaml
+          # Exit cleanly if nothing changed (idempotent)
+          git diff --cached --quiet && echo "No changes — skipping commit" && exit 0
+          git commit -m "deploy: imageTag=$TAG [skip ci]"
+          git push
+          echo "✓ GitOps repo updated — ArgoCD will sync shortly"

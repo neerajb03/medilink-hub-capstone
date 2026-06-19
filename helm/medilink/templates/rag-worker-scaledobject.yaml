@@ -1,0 +1,28 @@
+{{- if .Values.ragWorker.enabled }}
+# KEDA ScaledObject — scales rag-worker based on SQS queue depth.
+# Uses identityOwner: operator so KEDA uses its own IRSA role (sa-keda).
+# NO authenticationRef — that would conflict with identityOwner.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rag-worker
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: rag-worker
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  scaleTargetRef:
+    name: rag-worker
+  minReplicaCount: {{ .Values.ragWorker.keda.minReplicas }}
+  maxReplicaCount: {{ .Values.ragWorker.keda.maxReplicas }}
+  pollingInterval: {{ .Values.ragWorker.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.ragWorker.keda.cooldownPeriod }}
+  triggers:
+  - type: aws-sqs-queue
+    metadata:
+      queueURL: {{ .Values.ragWorker.sqsQueueUrl | quote }}
+      queueLength: {{ .Values.ragWorker.keda.queueLength | quote }}
+      awsRegion: {{ .Values.global.awsRegion | quote }}
+      identityOwner: operator
+{{- end }}

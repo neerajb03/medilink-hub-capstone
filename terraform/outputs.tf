@@ -3,19 +3,24 @@ output "vpc_id" {
   value       = aws_vpc.main.id
 }
 
-output "external_alb_dns" {
-  description = "Public domain to access MediLink Hub directly (blocked)"
-  value       = aws_lb.external.dns_name
+output "eks_cluster_name" {
+  description = "EKS cluster name (use with: aws eks update-kubeconfig --name <value>)"
+  value       = module.eks.cluster_name
 }
 
-output "cloudfront_domain_name" {
-  description = "CloudFront Domain Name for Dynamic Content Delivery"
-  value       = aws_cloudfront_distribution.main.domain_name
+output "eks_cluster_endpoint" {
+  description = "EKS API server endpoint"
+  value       = module.eks.cluster_endpoint
 }
 
-output "internal_alb_dns" {
-  description = "Private routing endpoint for backend microservices"
-  value       = aws_lb.internal.dns_name
+output "ecr_registry" {
+  description = "ECR registry URL prefix for docker push/pull"
+  value       = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com"
+}
+
+output "rag_sqs_queue_url" {
+  description = "SQS URL for RAG processing queue (document-service → rag-worker)"
+  value       = aws_sqs_queue.rag_processing.url
 }
 
 output "rds_endpoint" {

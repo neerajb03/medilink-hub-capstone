@@ -1,0 +1,130 @@
+# ── Public routes: no JWT required ───────────────────────────────────────────
+# login, register, JWKS endpoint, and all /health checks are open
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: medilink-public-routes
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  parentRefs:
+  - name: medilink-gateway
+    namespace: {{ .Values.global.namespace }}
+  rules:
+  # User service — auth endpoints
+  - matches:
+    - path: { type: Exact, value: /login }
+      method: POST
+    - path: { type: Exact, value: /register }
+      method: POST
+    - path: { type: Exact, value: /.well-known/jwks.json }
+      method: GET
+    backendRefs:
+    - name: user-service
+      port: 8001
+  # Health checks for all services (used by ALB target group health checks)
+  - matches:
+    - path: { type: Exact, value: /health }
+    backendRefs:
+    - name: user-service
+      port: 8001
+---
+# ── Protected routes: JWT required (SecurityPolicy applied below) ─────────────
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: medilink-user-routes
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  parentRefs:
+  - name: medilink-gateway
+    namespace: {{ .Values.global.namespace }}
+  rules:
+  - matches:
+    - path: { type: PathPrefix, value: /users }
+    - path: { type: Exact, value: /me }
+    - path: { type: PathPrefix, value: /doctors }
+    backendRefs:
+    - name: user-service
+      port: 8001
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: medilink-appointment-routes
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  parentRefs:
+  - name: medilink-gateway
+    namespace: {{ .Values.global.namespace }}
+  rules:
+  - matches:
+    - path: { type: PathPrefix, value: /appointments }
+    backendRefs:
+    - name: appointment-service
+      port: 8002
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: medilink-health-routes
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  parentRefs:
+  - name: medilink-gateway
+    namespace: {{ .Values.global.namespace }}
+  rules:
+  - matches:
+    - path: { type: PathPrefix, value: /health-records }
+    backendRefs:
+    - name: health-service
+      port: 8003
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: medilink-document-routes
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  parentRefs:
+  - name: medilink-gateway
+    namespace: {{ .Values.global.namespace }}
+  rules:
+  - matches:
+    - path: { type: PathPrefix, value: /documents }
+    backendRefs:
+    - name: document-service
+      port: 8004
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: medilink-rag-routes
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  parentRefs:
+  - name: medilink-gateway
+    namespace: {{ .Values.global.namespace }}
+  rules:
+  - matches:
+    - path: { type: PathPrefix, value: /rag }
+    backendRefs:
+    - name: rag-service
+      port: 8005

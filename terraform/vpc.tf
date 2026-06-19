@@ -25,7 +25,11 @@ resource "aws_subnet" "public_a" {
   cidr_block        = "10.0.1.0/24"
   availability_zone = local.az_a
   map_public_ip_on_launch = true
-  tags              = { Name = "medilink-public-1a" }
+  tags = {
+    Name                                        = "medilink-public-1a"
+    "kubernetes.io/cluster/medilink-eks"        = "shared"
+    "kubernetes.io/role/elb"                    = "1"
+  }
 }
 
 resource "aws_subnet" "public_b" {
@@ -33,7 +37,11 @@ resource "aws_subnet" "public_b" {
   cidr_block        = "10.0.2.0/24"
   availability_zone = local.az_b
   map_public_ip_on_launch = true
-  tags              = { Name = "medilink-public-1b" }
+  tags = {
+    Name                                        = "medilink-public-1b"
+    "kubernetes.io/cluster/medilink-eks"        = "shared"
+    "kubernetes.io/role/elb"                    = "1"
+  }
 }
 
 # Private Subnets (Frontend App)
@@ -56,14 +64,22 @@ resource "aws_subnet" "private_back_a" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.5.0/24"
   availability_zone = local.az_a
-  tags              = { Name = "medilink-private-back-1a" }
+  tags = {
+    Name                                        = "medilink-private-back-1a"
+    "kubernetes.io/cluster/medilink-eks"        = "shared"
+    "kubernetes.io/role/internal-elb"           = "1"
+  }
 }
 
 resource "aws_subnet" "private_back_b" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.6.0/24"
   availability_zone = local.az_b
-  tags              = { Name = "medilink-private-back-1b" }
+  tags = {
+    Name                                        = "medilink-private-back-1b"
+    "kubernetes.io/cluster/medilink-eks"        = "shared"
+    "kubernetes.io/role/internal-elb"           = "1"
+  }
 }
 
 # Private Subnets (RDS Databases)
@@ -161,4 +177,20 @@ resource "aws_route_table_association" "front_b" {
 resource "aws_route_table_association" "back_b" {
   subnet_id      = aws_subnet.private_back_b.id
   route_table_id = aws_route_table.private_b.id
+}
+
+# DB subnets — isolated (no NAT route needed; RDS does not initiate outbound traffic)
+resource "aws_route_table" "private_db" {
+  vpc_id = aws_vpc.main.id
+  tags   = { Name = "medilink-private-rt-db" }
+}
+
+resource "aws_route_table_association" "db_a" {
+  subnet_id      = aws_subnet.private_db_a.id
+  route_table_id = aws_route_table.private_db.id
+}
+
+resource "aws_route_table_association" "db_b" {
+  subnet_id      = aws_subnet.private_db_b.id
+  route_table_id = aws_route_table.private_db.id
 }

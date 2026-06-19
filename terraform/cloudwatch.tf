@@ -5,8 +5,10 @@ locals {
     "/medilink/backend/appointment-service",
     "/medilink/backend/health-service",
     "/medilink/backend/document-service",
-    "/medilink/backend/cloud-init",      # For EC2 bootstrap logs
-    "/aws/lambda/medilink-notification-worker"
+    "/medilink/backend/rag-service",
+    "/medilink/backend/rag-worker",
+    "/aws/lambda/medilink-notification-worker",
+    "/medilink/aiops/pod-crash-diagnosis",
   ]
 }
 
@@ -33,21 +35,24 @@ resource "aws_sns_topic_subscription" "ops_email" {
 
 # --- MVP CloudWatch Alarms ---
 
-# 1. External ALB 5xx Errors (API is down)
-resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
-  alarm_name          = "medilink-alb-5xx-errors"
+# 1. KGateway ALB 5xx Errors — dimension is set after Phase 2 via var.gateway_alb_dns
+# The LB Controller creates this ALB; its ARN suffix is not known at Terraform apply time.
+# Alarm is wired up in Phase 12 (AIOps) after the ALB exists.
+# Placeholder alarm on the SQS RAG DLQ instead:
+resource "aws_cloudwatch_metric_alarm" "rag_dlq_depth" {
+  alarm_name          = "medilink-rag-dlq-not-empty"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "HTTPCode_ELB_5XX_Count"
-  namespace           = "AWS/ApplicationELB"
-  period              = "60"
-  statistic           = "Sum"
-  threshold           = "10" # Alert if more than 10 5xx errors in 2 minutes
-  alarm_description   = "API is returning 5xx errors to users."
+  evaluation_periods  = "1"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = "300"
+  statistic           = "Maximum"
+  threshold           = "0"
+  alarm_description   = "RAG document processing is failing — messages in DLQ."
   alarm_actions       = [aws_sns_topic.ops_alarms.arn]
-  
+
   dimensions = {
-    LoadBalancer = aws_lb.external.arn_suffix
+    QueueName = aws_sqs_queue.rag_processing_dlq.name
   }
 }
 

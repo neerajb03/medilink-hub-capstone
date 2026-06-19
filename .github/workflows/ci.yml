@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ── Layer 1: Secret scanning ──────────────────────────────────────────────
+  secret-scan:
+    name: Secret Scanning (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Layer 2: SAST ─────────────────────────────────────────────────────────
+  sast:
+    name: SAST (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install bandit
+      - name: Run Bandit (HIGH severity + HIGH confidence only)
+        run: |
+          bandit -r user-service appointment-service health-service \
+            document-service rag-service rag-worker \
+            --severity-level high --confidence-level high
+
+  # ── Layer 3: Dependency / SCA scanning ───────────────────────────────────
+  dependency-scan:
+    name: Dependency Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pip-audit
+      - name: Audit Python service dependencies
+        run: |
+          FAILED=0
+          for req in \
+            user-service/requirements.txt \
+            appointment-service/requirements.txt \
+            health-service/requirements.txt \
+            document-service/requirements.txt \
+            rag-service/requirements.txt \
+            rag-worker/requirements.txt; do
+            echo "=== Auditing $req ==="
+            pip-audit -r "$req" || FAILED=1
+          done
+          exit $FAILED
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+  # ── Helm lint ─────────────────────────────────────────────────────────────
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: "3.14.0"
+      - name: Lint chart with dummy values
+        run: |
+          helm lint helm/medilink \
+            --set global.imageRegistry=000000000000.dkr.ecr.us-east-1.amazonaws.com \
+            --set global.imageTag=sha-test \
+            --set global.awsRegion=us-east-1 \
+            --set global.awsAccountId=000000000000 \
+            --set global.namespace=medilink \
+            --set s3.bucketName=test-bucket \
+            --set gateway.wafArn=arn:aws:wafv2:us-east-1:000000000000:regional/webacl/test/test
+
+  # ── Detect which services changed ─────────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            user-service:
+              - 'user-service/**'
+            appointment-service:
+              - 'appointment-service/**'
+            health-service:
+              - 'health-service/**'
+            document-service:
+              - 'document-service/**'
+            rag-service:
+              - 'rag-service/**'
+            rag-worker:
+              - 'rag-worker/**'
+            frontend:
+              - 'frontend/**'
+
+  # ── Layer 4: Container image scanning (Trivy) ─────────────────────────────
+  build-and-scan:
+    name: Build & Scan (${{ matrix.service }})
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.services != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t ${{ matrix.service }}:pr-check ./${{ matrix.service }}
+      - name: Trivy scan — CRITICAL blocks PR
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ matrix.service }}:pr-check"
+          format: table
+          exit-code: "1"
+          severity: CRITICAL
+      - name: Trivy scan — HIGH (warn only, does not block)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ matrix.service }}:pr-check"
+          format: table
+          exit-code: "0"
+          severity: HIGH

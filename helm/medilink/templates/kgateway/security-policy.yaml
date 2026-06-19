@@ -1,0 +1,37 @@
+# JWT SecurityPolicy — applies RS256 validation to all protected HTTPRoutes.
+# Public routes (login/register/jwks) are in a separate HTTPRoute with no policy.
+# KGateway fetches the JWKS from user-service at startup and caches the public key.
+#
+# This is a separate SecurityPolicy per route so each route can be independently
+# exempted or have different JWT claim requirements in the future.
+
+{{- $ns := .Values.global.namespace }}
+{{- $jwksUri := printf "http://user-service.%s.svc.cluster.local:8001/.well-known/jwks.json" $ns }}
+
+{{- range $routeName := list "medilink-user-routes" "medilink-appointment-routes" "medilink-health-routes" "medilink-document-routes" "medilink-rag-routes" }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: jwt-policy-{{ $routeName }}
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: {{ $routeName }}
+  jwt:
+    providers:
+    - name: medilink-user-service
+      issuer: "medilink-user-service"
+      remoteJWKS:
+        uri: {{ $jwksUri }}
+      claimToHeaders:
+      - claim: user_id
+        header: X-User-Id
+      - claim: role
+        header: X-User-Role
+{{- end }}

@@ -223,17 +223,22 @@ async def create_appointment(
         
     if data.doctor_id:
         # Cross-service validation: ensure the assigned doctor exists and is actually a doctor
-        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://internal-alb")
+        INTERNAL_ALB_DNS = os.getenv("INTERNAL_ALB_DNS", "http://user-service:8001")
         if not INTERNAL_ALB_DNS.startswith("http"):
             INTERNAL_ALB_DNS = "http://" + INTERNAL_ALB_DNS
-            
+
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{INTERNAL_ALB_DNS}/users/{data.doctor_id}")
+                resp = await client.get(
+                    f"{INTERNAL_ALB_DNS}/users/{data.doctor_id}",
+                    headers={"Authorization": f"Bearer {user['token']}"},
+                )
                 if resp.status_code != 200 or resp.json().get("role") != "doctor":
-                    print("Failed to validate doctor synchronously, proceeding with soft consistency")
+                    raise HTTPException(status_code=400, detail="Invalid doctor_id — user does not exist or is not a doctor")
+        except HTTPException:
+            raise
         except Exception as e:
-            print(f"Doctor validation skipped (service unavailable): {e}")
+            logger.warning(f"Doctor validation skipped (service unavailable): {e}")
 
     appt = Appointment(
         patient_id=user["user_id"],
@@ -368,6 +373,30 @@ async def list_appointments(
         }
         for a in appointments
     ]
+
+
+@app.get("/appointments/check-relationship")
+async def check_doctor_patient_relationship(
+    doctor_id: str,
+    patient_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check if a doctor has ever had an appointment with a patient.
+    Used by document-service to verify access permissions."""
+    if user["role"] not in ("doctor", "admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from uuid import UUID as PyUUID
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.doctor_id == PyUUID(doctor_id),
+            Appointment.patient_id == PyUUID(patient_id),
+            Appointment.is_deleted == False,
+        ).limit(1)
+    )
+    has_relationship = result.scalar_one_or_none() is not None
+    return {"has_relationship": has_relationship}
 
 
 @app.get("/appointments/{appt_id}")

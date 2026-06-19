@@ -1,0 +1,98 @@
+# ── Global settings ──────────────────────────────────────────────────────────
+global:
+  namespace: medilink
+  # ECR registry prefix — override with: 371454942267.dkr.ecr.us-east-1.amazonaws.com
+  imageRegistry: "371454942267.dkr.ecr.us-east-1.amazonaws.com"
+  imageTag: "latest"          # overridden by CI/CD with the git sha: sha-<commit>
+  awsRegion: "us-east-1"
+  awsAccountId: "371454942267"
+
+  # RSA public key injected here so all services can verify JWTs
+  # In production this is fetched from Secrets Manager; for EKS it's set via:
+  #   --set global.jwtPublicKey="$(cat user-service/keys/public.pem)"
+  jwtPublicKey: ""
+
+  # Internal DNS base (K8s cluster-local service discovery)
+  # Services call each other via: http://<service-name>.<namespace>.svc.cluster.local:<port>
+  internalDns: "svc.cluster.local"
+
+# ── Per-service configuration ─────────────────────────────────────────────────
+services:
+  user-service:
+    enabled: true
+    port: 8001
+    replicas: 2
+    dbName: user_db
+    irsaRoleArn: ""   # filled by: terraform output -raw sa_user_service_role_arn
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits:   { cpu: "500m", memory: "256Mi" }
+
+  appointment-service:
+    enabled: true
+    port: 8002
+    replicas: 2
+    dbName: appointment_db
+    irsaRoleArn: ""
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits:   { cpu: "500m", memory: "256Mi" }
+
+  health-service:
+    enabled: true
+    port: 8003
+    replicas: 2
+    dbName: health_db
+    irsaRoleArn: ""
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits:   { cpu: "500m", memory: "256Mi" }
+
+  document-service:
+    enabled: true
+    port: 8004
+    replicas: 2
+    dbName: document_db
+    irsaRoleArn: ""
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits:   { cpu: "500m", memory: "256Mi" }
+
+  rag-service:
+    enabled: true
+    port: 8005
+    replicas: 2
+    dbName: rag_db
+    irsaRoleArn: ""
+    resources:
+      requests: { cpu: "200m", memory: "256Mi" }
+      limits:   { cpu: "1000m", memory: "512Mi" }
+
+# ── RAG Worker (KEDA-scaled, no HTTP port) ────────────────────────────────────
+ragWorker:
+  enabled: true
+  irsaRoleArn: ""   # medilink-sa-rag-worker role ARN from Terraform output
+  dbName: rag_db
+  sqsQueueUrl: ""   # terraform output -raw rag_sqs_queue_url
+  chunkSize: 500
+  chunkOverlap: 50
+  resources:
+    requests: { cpu: "200m", memory: "256Mi" }
+    limits:   { cpu: "1000m", memory: "1Gi" }
+  keda:
+    minReplicas: 0
+    maxReplicas: 10
+    queueLength: "5"         # scale up when >5 messages per replica
+    pollingInterval: 30      # seconds between SQS checks
+    cooldownPeriod: 300      # seconds before scaling down
+
+# ── KGateway / Envoy Gateway ─────────────────────────────────────────────────
+gateway:
+  # ARN of the REGIONAL WAF created by Terraform — paste from: terraform output regional_waf_arn
+  wafArn: ""
+  # Envoy Gateway gatewayClassName (installed separately via helm before this chart)
+  gatewayClassName: "eg"
+
+# ── S3 (document-service) ─────────────────────────────────────────────────────
+s3:
+  bucketName: "medilink-docs-production-bucket"

@@ -1,0 +1,24 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: medilink-gateway
+  namespace: {{ .Values.global.namespace }}
+  annotations:
+    # AWS Load Balancer Controller creates and manages this ALB
+    service.beta.kubernetes.io/aws-load-balancer-type: "external"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+    # Regional WAF attachment — paste ARN from: terraform output regional_waf_arn
+    service.beta.kubernetes.io/aws-load-balancer-wafv2-acl-arn: {{ .Values.gateway.wafArn | quote }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  gatewayClassName: {{ .Values.gateway.gatewayClassName }}
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: Same

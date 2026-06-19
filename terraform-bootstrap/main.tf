@@ -20,7 +20,8 @@ provider "aws" {
 }
 
 resource "aws_s3_bucket" "tf_state" {
-  bucket = "medilink-tf-state-371454942267"
+  bucket        = "medilink-tf-state-371454942267"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_versioning" "versioning" {

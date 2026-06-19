@@ -1,0 +1,73 @@
+{{- $svc := index .Values.services "document-service" }}
+{{- if $svc.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: document-service
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: document-service
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  replicas: {{ $svc.replicas }}
+  selector:
+    matchLabels:
+      app: document-service
+  template:
+    metadata:
+      labels:
+        app: document-service
+    spec:
+      serviceAccountName: sa-document-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: document-service
+        image: {{ .Values.global.imageRegistry }}/document-service:{{ .Values.global.imageTag }}
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8004
+        env:
+        - name: AWS_DEFAULT_REGION
+          value: {{ .Values.global.awsRegion | quote }}
+        - name: JWT_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: medilink-jwt-keys
+              key: public.pem
+        - name: S3_BUCKET_NAME
+          value: {{ .Values.s3.bucketName | quote }}
+        - name: SQS_RAG_QUEUE_URL
+          value: "https://sqs.{{ .Values.global.awsRegion }}.amazonaws.com/{{ .Values.global.awsAccountId }}/medilink-rag-processing"
+        - name: INTERNAL_ALB_DNS
+          value: "http://appointment-service.{{ .Values.global.namespace }}.svc.cluster.local:8002"
+        livenessProbe:
+          httpGet: { path: /health, port: http }
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet: { path: /health, port: http }
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: {{ $svc.resources.requests.cpu | quote }}
+            memory: {{ $svc.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ $svc.resources.limits.cpu | quote }}
+            memory: {{ $svc.resources.limits.memory | quote }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: document-service
+{{- end }}

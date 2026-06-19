@@ -20,21 +20,6 @@ resource "aws_kms_key" "medilink" {
         Resource = "*"
       },
       {
-        Sid    = "AllowBackendRoleUsage"
-        Effect = "Allow"
-        Principal = {
-          AWS = aws_iam_role.backend.arn
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
         Sid    = "AllowCloudWatchLogsUsage"
         Effect = "Allow"
         Principal = {

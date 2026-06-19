@@ -18,24 +18,44 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   })
 }
 
-# --- Secrets Manager for JWT Secret ---
-resource "random_password" "jwt_secret" {
-  length  = 64
-  special = false
-}
-
-resource "aws_secretsmanager_secret" "jwt_secret" {
-  name                    = "medilink/production/jwt-secret"
-  description             = "JWT signing secret for authentication"
+# --- Secrets Manager for RS256 RSA Keypair ---
+# Private key: user-service only (signs JWTs)
+resource "aws_secretsmanager_secret" "jwt_rsa_private_key" {
+  name                    = "medilink/production/jwt-rsa-private-key"
+  description             = "RSA 2048 private key for RS256 JWT signing (user-service only)"
   kms_key_id              = aws_kms_key.medilink.arn
   recovery_window_in_days = 0
 
-  tags = { Name = "medilink-jwt-secret" }
+  tags = { Name = "medilink-jwt-rsa-private-key" }
 }
 
-resource "aws_secretsmanager_secret_version" "jwt_secret" {
-  secret_id     = aws_secretsmanager_secret.jwt_secret.id
-  secret_string = random_password.jwt_secret.result
+resource "aws_secretsmanager_secret_version" "jwt_rsa_private_key" {
+  secret_id     = aws_secretsmanager_secret.jwt_rsa_private_key.id
+  # Reads the Phase 0 generated keypair. State is encrypted at rest (S3 backend + KMS).
+  secret_string = file("${path.module}/../user-service/keys/private.pem")
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+# Public key: all services (verify JWTs)
+resource "aws_secretsmanager_secret" "jwt_rsa_public_key" {
+  name                    = "medilink/production/jwt-rsa-public-key"
+  description             = "RSA 2048 public key for RS256 JWT verification (all services)"
+  kms_key_id              = aws_kms_key.medilink.arn
+  recovery_window_in_days = 0
+
+  tags = { Name = "medilink-jwt-rsa-public-key" }
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_rsa_public_key" {
+  secret_id     = aws_secretsmanager_secret.jwt_rsa_public_key.id
+  secret_string = file("${path.module}/../user-service/keys/public.pem")
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 # --- Secrets Manager for Hugging Face API Key ---

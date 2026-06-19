@@ -121,6 +121,32 @@ async def global_handler(request: Request, exc: Exception):
     )
 
 
+# --- JWKS endpoint (used by KGateway/Envoy to validate RS256 JWTs) ---
+@app.get("/.well-known/jwks.json", include_in_schema=False)
+async def jwks():
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+    from auth.jwt import PUBLIC_KEY
+    import base64
+
+    pub = load_pem_public_key(PUBLIC_KEY.encode())
+    pub_numbers = pub.public_numbers()
+
+    def _int_to_base64url(n: int) -> str:
+        length = (n.bit_length() + 7) // 8
+        return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
+
+    return {
+        "keys": [{
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "medilink-key-1",
+            "n": _int_to_base64url(pub_numbers.n),
+            "e": _int_to_base64url(pub_numbers.e),
+        }]
+    }
+
+
 # --- Schemas ---
 class RegisterRequest(BaseModel):
     name: str

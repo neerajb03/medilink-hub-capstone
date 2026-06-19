@@ -1,0 +1,53 @@
+{{- if .Values.ragWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-worker
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: rag-worker
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: medilink-hub
+spec:
+  # replicas is controlled by KEDA ScaledObject — do NOT set replicas here
+  selector:
+    matchLabels:
+      app: rag-worker
+  template:
+    metadata:
+      labels:
+        app: rag-worker
+    spec:
+      serviceAccountName: sa-rag-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: rag-worker
+        image: {{ .Values.global.imageRegistry }}/rag-worker:{{ .Values.global.imageTag }}
+        imagePullPolicy: Always
+        env:
+        - name: AWS_DEFAULT_REGION
+          value: {{ .Values.global.awsRegion | quote }}
+        - name: SQS_RAG_QUEUE_URL
+          value: {{ .Values.ragWorker.sqsQueueUrl | quote }}
+        - name: S3_BUCKET_NAME
+          value: {{ .Values.s3.bucketName | quote }}
+        - name: CHUNK_SIZE
+          value: {{ .Values.ragWorker.chunkSize | quote }}
+        - name: CHUNK_OVERLAP
+          value: {{ .Values.ragWorker.chunkOverlap | quote }}
+        resources:
+          requests:
+            cpu: {{ .Values.ragWorker.resources.requests.cpu | quote }}
+            memory: {{ .Values.ragWorker.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.ragWorker.resources.limits.cpu | quote }}
+            memory: {{ .Values.ragWorker.resources.limits.memory | quote }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+{{- end }}

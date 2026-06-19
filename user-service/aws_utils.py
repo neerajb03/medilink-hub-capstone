@@ -43,9 +43,17 @@ def get_database_url(db_name: str) -> str:
     )
 
 
-def get_jwt_secret() -> str:
-    """Fetch JWT signing secret from Secrets Manager."""
-    env_secret = os.getenv("JWT_SECRET")
-    if env_secret:
-        return env_secret
-    return get_secret("medilink/production/jwt-secret")
+def get_rsa_private_key() -> str:
+    """Fetch RSA private key for JWT signing (user-service only)."""
+    env_key = os.getenv("JWT_PRIVATE_KEY")
+    if env_key:
+        return env_key.replace("\\n", "\n")
+    return get_secret("medilink/production/jwt-rsa-private-key")
+
+
+def get_rsa_public_key() -> str:
+    """Fetch RSA public key for JWT verification (all services)."""
+    env_key = os.getenv("JWT_PUBLIC_KEY")
+    if env_key:
+        return env_key.replace("\\n", "\n")
+    return get_secret("medilink/production/jwt-rsa-public-key")

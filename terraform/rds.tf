@@ -19,16 +19,18 @@ resource "aws_db_instance" "postgres" {
   max_allocated_storage  = 100
   db_name                = "postgres" # Initial DB
   engine                 = "postgres"
-  engine_version         = "18.3"
   instance_class         = "db.t4g.micro"
   username               = "dbadmin"
   password               = random_password.db_password.result
   db_subnet_group_name   = aws_db_subnet_group.rds.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  multi_az               = false # Single AZ for cost efficiency on db.t4g.micro
-  skip_final_snapshot    = true
-  storage_encrypted      = true
-  kms_key_id             = aws_kms_key.medilink.arn
+  multi_az                = false # Single AZ for cost efficiency (production would enable Multi-AZ)
+  skip_final_snapshot     = true
+  storage_encrypted       = true
+  kms_key_id              = aws_kms_key.medilink.arn
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "Mon:04:00-Mon:05:00"
 
   tags = { Name = "medilink-rds-postgres" }
 }
