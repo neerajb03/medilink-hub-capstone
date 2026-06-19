@@ -46,9 +46,9 @@ jobs:
           SERVICES="user-service appointment-service health-service document-service rag-service rag-worker frontend"
           for svc in $SERVICES; do
             echo "━━━ Building $svc ━━━"
-            docker build -t "$ECR_REGISTRY/$svc:$TAG" "./$svc"
-            docker push "$ECR_REGISTRY/$svc:$TAG"
-            echo "✓ Pushed: $ECR_REGISTRY/$svc:$TAG"
+            docker build -t "$ECR_REGISTRY/medilink/$svc:$TAG" "./$svc"
+            docker push "$ECR_REGISTRY/medilink/$svc:$TAG"
+            echo "✓ Pushed: $ECR_REGISTRY/medilink/$svc:$TAG"
           done
 
   # ── Update gitops repo so ArgoCD picks up the new tag ────────────────────
