@@ -120,7 +120,7 @@ jobs:
   build-and-scan:
     name: Build & Scan (${{ matrix.service }})
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.services != '[]' }}
+    if: needs.detect-changes.outputs.services != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
