@@ -73,9 +73,9 @@ jobs:
         run: |
           cd /tmp/gitops
           # yq is available on ubuntu-latest runners
-          yq e ".global.imageTag = \"$TAG\"" -i values.yaml
+          yq e ".global.imageTag = \"$TAG\"" -i helm/medilink/values.yaml
           echo "Updated imageTag → $TAG"
-          cat values.yaml
+          cat helm/medilink/values.yaml
 
       - name: Commit and push if changed
         env:
@@ -84,7 +84,7 @@ jobs:
           cd /tmp/gitops
           git config user.email "ci-bot@medilink-hub.com"
           git config user.name "MediLink CI Bot"
-          git add values.yaml
+          git add helm/medilink/values.yaml
           # Exit cleanly if nothing changed (idempotent)
           git diff --cached --quiet && echo "No changes — skipping commit" && exit 0
           git commit -m "deploy: imageTag=$TAG [skip ci]"
