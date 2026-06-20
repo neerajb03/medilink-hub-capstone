@@ -23,7 +23,7 @@ services:
     port: 8001
     replicas: 2
     dbName: user_db
-    irsaRoleArn: ""   # filled by: terraform output -raw sa_user_service_role_arn
+    irsaRoleArn: "arn:aws:iam::371454942267:role/medilink-sa-user-service"
     resources:
       requests: { cpu: "100m", memory: "128Mi" }
       limits:   { cpu: "500m", memory: "256Mi" }
@@ -33,7 +33,7 @@ services:
     port: 8002
     replicas: 2
     dbName: appointment_db
-    irsaRoleArn: ""
+    irsaRoleArn: "arn:aws:iam::371454942267:role/medilink-sa-appointment-service"
     resources:
       requests: { cpu: "100m", memory: "128Mi" }
       limits:   { cpu: "500m", memory: "256Mi" }
@@ -43,7 +43,7 @@ services:
     port: 8003
     replicas: 2
     dbName: health_db
-    irsaRoleArn: ""
+    irsaRoleArn: "arn:aws:iam::371454942267:role/medilink-sa-health-service"
     resources:
       requests: { cpu: "100m", memory: "128Mi" }
       limits:   { cpu: "500m", memory: "256Mi" }
@@ -53,7 +53,7 @@ services:
     port: 8004
     replicas: 2
     dbName: document_db
-    irsaRoleArn: ""
+    irsaRoleArn: "arn:aws:iam::371454942267:role/medilink-sa-document-service"
     resources:
       requests: { cpu: "100m", memory: "128Mi" }
       limits:   { cpu: "500m", memory: "256Mi" }
@@ -63,7 +63,7 @@ services:
     port: 8005
     replicas: 2
     dbName: rag_db
-    irsaRoleArn: ""
+    irsaRoleArn: "arn:aws:iam::371454942267:role/medilink-sa-rag-service"
     resources:
       requests: { cpu: "200m", memory: "256Mi" }
       limits:   { cpu: "1000m", memory: "512Mi" }
@@ -71,9 +71,9 @@ services:
 # ── RAG Worker (KEDA-scaled, no HTTP port) ────────────────────────────────────
 ragWorker:
   enabled: true
-  irsaRoleArn: ""   # medilink-sa-rag-worker role ARN from Terraform output
+  irsaRoleArn: "arn:aws:iam::371454942267:role/medilink-sa-rag-worker"
   dbName: rag_db
-  sqsQueueUrl: ""   # terraform output -raw rag_sqs_queue_url
+  sqsQueueUrl: "https://sqs.us-east-1.amazonaws.com/371454942267/medilink-rag-processing"
   chunkSize: 500
   chunkOverlap: 50
   resources:
@@ -89,7 +89,7 @@ ragWorker:
 # ── KGateway / Envoy Gateway ─────────────────────────────────────────────────
 gateway:
   # ARN of the REGIONAL WAF created by Terraform — paste from: terraform output regional_waf_arn
-  wafArn: ""
+  wafArn: "arn:aws:wafv2:us-east-1:371454942267:regional/webacl/medilink-regional-waf/af68ca58-d405-4e59-8e58-c9606d64b3d1"
   # Envoy Gateway gatewayClassName (installed separately via helm before this chart)
   gatewayClassName: "eg"
 
