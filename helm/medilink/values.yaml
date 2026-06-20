@@ -1,8 +1,8 @@
 # ── Global settings ──────────────────────────────────────────────────────────
 global:
   namespace: medilink
-  # ECR registry prefix — override with: 371454942267.dkr.ecr.us-east-1.amazonaws.com
-  imageRegistry: "371454942267.dkr.ecr.us-east-1.amazonaws.com"
+  # ECR registry prefix — override with: 371454942267.dkr.ecr.us-east-1.amazonaws.com/medilink
+  imageRegistry: "371454942267.dkr.ecr.us-east-1.amazonaws.com/medilink"
   imageTag: "latest"          # overridden by CI/CD with the git sha: sha-<commit>
   awsRegion: "us-east-1"
   awsAccountId: "371454942267"

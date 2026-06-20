@@ -1,0 +1,31 @@
+# Apply this once after ArgoCD is installed in EKS:
+#
+#   kubectl apply -f argocd/application.yaml
+#
+# ArgoCD watches medilink-gitops (which has the full Helm chart + values).
+# The CD pipeline updates helm/medilink/values.yaml on every merge to main.
+# ArgoCD detects the change and does a rolling update automatically.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: medilink-hub
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/neerajb03/medilink-gitops
+    targetRevision: main
+    path: helm/medilink
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: medilink
+  syncPolicy:
+    automated:
+      prune: true       # remove resources deleted from Helm chart
+      selfHeal: true    # revert any manual kubectl changes automatically
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ServerSideApply=true

@@ -24,7 +24,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: appointment-service
-        image: {{ .Values.global.imageRegistry }}/appointment-service:{{ .Values.global.imageTag }}
+        image: {{ .Values.global.imageRegistry }}/medilink/appointment-service:{{ .Values.global.imageTag }}
         imagePullPolicy: Always
         ports:
         - name: http

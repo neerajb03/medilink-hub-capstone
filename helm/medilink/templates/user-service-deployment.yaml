@@ -24,7 +24,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: user-service
-        image: {{ .Values.global.imageRegistry }}/user-service:{{ .Values.global.imageTag }}
+        image: {{ .Values.global.imageRegistry }}/medilink/user-service:{{ .Values.global.imageTag }}
         imagePullPolicy: Always
         ports:
         - name: http
