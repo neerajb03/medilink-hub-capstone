@@ -39,6 +39,8 @@ spec:
               key: public.pem
         - name: S3_BUCKET_NAME
           value: {{ .Values.s3.bucketName | quote }}
+        - name: S3_ENDPOINT
+          value: ""
         - name: SQS_RAG_QUEUE_URL
           value: "https://sqs.{{ .Values.global.awsRegion }}.amazonaws.com/{{ .Values.global.awsAccountId }}/medilink-rag-processing"
         - name: INTERNAL_ALB_DNS
