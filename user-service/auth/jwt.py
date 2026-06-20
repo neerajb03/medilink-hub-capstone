@@ -36,7 +36,7 @@ PUBLIC_KEY = _load_public_key()
 
 
 def create_token(user_id: str, role: str) -> str:
-    return jwt.encode({"user_id": user_id, "role": role}, PRIVATE_KEY, algorithm=ALGORITHM)
+    return jwt.encode({"user_id": user_id, "role": role, "iss": "medilink-user-service"}, PRIVATE_KEY, algorithm=ALGORITHM)
 
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
