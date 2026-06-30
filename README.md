@@ -34,6 +34,13 @@ MediLink Hub is architected following strict microservices principles. Each serv
 * **Object Store Integration:** Seamless connection to **MinIO** (S3 compatible) for uploading and retrieving medical attachments.
 * **Safe Storage Paths:** Dynamically creates buckets (`medilink-docs`) and tracks file metadata securely in PostgreSQL.
 
+### 🤖 AI Retrieval-Augmented Generation (RAG)
+* **Intelligent Chatbot (`rag-service`):** Powered by LLMs (like Amazon Bedrock), providing grounded clinical answers by synthesizing patient history and external medical literature.
+* **Asynchronous Embeddings (`rag-worker`):** Event-driven worker that chunks and embeds clinical documents, storing high-dimensional vectors in `pgvector` for semantic search.
+
+### 📬 Asynchronous Notifications
+* **Notification Worker:** Background worker script (`notification_worker.py`) handling decoupled real-time alerts and system notifications.
+
 ### 🎨 Premium Frontend Dashboard (Port `3000`)
 * **Modern Design Language:** Tailored Glassmorphism aesthetics with deep HSL dark modes, responsive layouts, and rich micro-interactions.
 * **Zero Page-Reloads:** Utilizes React Router for highly responsive SPA routing.
@@ -119,9 +126,18 @@ Below are fixes for issues resolved during production testing:
 * **Datetime Timezone Clashes:** Programmatically converted timezone-aware ISO string formats into offset-naive UTC dates inside `appointment-service` validator checks prior to inserting into PostgreSQL tables.
 
 
-## ☁️ AWS 3-Tier Production Architecture
+## 🔄 CI/CD & GitOps Automation
 
-MediLink Hub is deployed on AWS using a production-grade 3-tier architecture spanning two Availability Zones in `us-east-1`, fully automated via **Terraform**.
+* **GitHub Actions:** Automated CI/CD pipelines configured in `.github/workflows` to ensure code quality, build Docker images, and push to container registries on every commit.
+* **Amazon EKS & Kubernetes:** The platform is fully container-orchestrated using Amazon EKS.
+* **ArgoCD GitOps:** Declarative continuous deployment using ArgoCD (`argocd/`), ensuring the live cluster state always matches the Git repository.
+* **Helm Charts:** Kubernetes resources are templated using Helm (`helm/`) for consistent, repeatable deployments across environments.
+
+---
+
+## ☁️ AWS Production Architecture
+
+MediLink Hub was initially deployed on AWS using a production-grade 3-tier Auto Scaling architecture (diagrammed below), and has since evolved into a container-orchestrated system using **Amazon EKS (Elastic Kubernetes Service)**. The underlying infrastructure is fully automated via **Terraform**.
 
 ```mermaid
 graph TD
